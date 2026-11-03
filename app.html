@@ -842,7 +842,7 @@ function openAcessos(){
     shell('Acessos',`<p class="sub" style="margin:0;font-size:13px">A <strong>dona</strong> vê e edita tudo. A <strong>assistente</strong> vê e edita só os dados de cadastro, vê o Tipo e lança adicionais sem valor. Ela não vê valores, observações nem status do boleto.</p>
       <div class="imp">${(lista||[]).map(u=>`<div class="imp-row"><span class="nm">${esc(u.usuario)}</span><span class="tag">${u.papel==='dona'?'dona':'assistente'}</span>${u.papel==='dona'?'':`<button class="btn danger" type="button" data-rmu="${esc(u.usuario)}" style="height:32px">Remover</button>`}</div>`).join('')||'<div class="sub">Carregando…</div>'}</div>
       <div class="sec">Criar acesso ou trocar senha</div>
-      <div class="field"><label for="acU">Usuário</label><input id="acU" autocomplete="off" autocapitalize="none" spellcheck="false" value="head de mídias"></div>
+      <div class="field"><label for="acU">Usuário</label><input id="acU" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="login"></div>
       <div class="field"><label for="acP">Senha (mínimo 6 caracteres)</label><input id="acP" type="password" autocomplete="new-password"></div>
       <div class="field"><label for="acP2">Confirmar senha</label><input id="acP2" type="password" autocomplete="new-password"></div>
       <p class="sub" style="margin:0;font-size:12px">Usuário novo entra como assistente. Usar um usuário que já existe troca a senha dele e encerra as sessões abertas.</p>`,
