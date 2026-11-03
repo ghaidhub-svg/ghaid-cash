@@ -162,8 +162,10 @@ function salvarConfig_(cfg) {
  * vê o Tipo e lança adicionais sem valor. Valores, Observações e Status nunca
  * saem do servidor para a assistente. Senhas ficam como hash nas propriedades do script.
  */
-var VE_ASSIST = ['cliente', 'razao', 'doc', 'publicacoes', 'contato', 'diaEnvio', 'tipo', 'arquivado'];
-var EDITA_ASSIST = ['cliente', 'razao', 'doc', 'publicacoes', 'contato', 'diaEnvio'];
+var VE_ASSIST = ['cliente', 'doc', 'publicacoes', 'pubPlano', 'contato', 'diaEnvio', 'tipo', 'arquivado'];
+// Em cliente existente a assistente só altera publicações. Em cliente novo, também o nome.
+var EDITA_ASSIST = ['publicacoes', 'pubPlano'];
+var NOVO_ASSIST = ['cliente', 'publicacoes', 'pubPlano'];
 var SESSAO_DIAS = 30;
 
 function props_() { return PropertiesService.getScriptProperties(); }
@@ -311,8 +313,9 @@ function salvarCliente(token, id, dados, substituir) {
   if (s.papel === 'dona') return salvarCliente_(id, dados, substituir);
   id = String(id || '');
   if (!id) throw new Error('Cliente inválido.');
+  var existe = listar_().some(function (c) { return c.id === id; });
   var limpo = {};
-  EDITA_ASSIST.forEach(function (k) { if (k in dados) limpo[k] = dados[k]; });
+  (existe ? EDITA_ASSIST : NOVO_ASSIST).forEach(function (k) { if (k in dados) limpo[k] = dados[k]; });
   if (dados.adicionaisItens) limpo.adicionaisItens = juntarItensAssist_(id, dados.adicionaisItens);
   return salvarCliente_(id, limpo, false);
 }

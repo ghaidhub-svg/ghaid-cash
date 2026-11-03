@@ -144,6 +144,16 @@ td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
 .tiposel option{color:var(--fg);background:var(--surface)}
 td.tipo .c.livre{color:var(--accent);font-weight:600}
 .so-assist{display:none}.assist .so-assist{display:inline}.assist .so-dona{display:none!important}
+.assist #delBtn{display:none!important}
+td.pubcell .c{cursor:pointer}
+.pubil{display:flex;align-items:center;gap:10px;min-height:var(--ctl);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font-size:14px;font-weight:600}
+.pubil input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
+.pubil small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.pubrow{display:grid;grid-template-columns:minmax(0,1fr) 90px 40px;gap:8px;align-items:center}
+.pubrow input{height:var(--ctl);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0}
+.pubrow input.q{text-align:right}
+#pubSum{font-size:13px;font-weight:600}
+#pubSum.warn{color:var(--bad)}
 .assist .dash,.assist #resetOkBtn,.assist #colsBtn,.assist #csvBtn,.assist .colbar,.assist .chip[data-f="arq"],.assist .act{display:none!important}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
 .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
@@ -268,7 +278,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 .addcol select{border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;background:var(--surface);color:var(--fg)}
 .toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:var(--r);font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 .notice{background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--fg);border-radius:var(--r);padding:10px 14px;font-size:13px}
-@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}.drawer.noanim{animation:none}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
 /* padronização: um raio, uma altura de controle, uma grade para cards */
 :root{--r:8px;--ctl:40px;--gap:16px}
 .dash{gap:var(--gap)}
@@ -472,14 +482,16 @@ const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
 const naoSeAplica=(c,r)=>semCobranca(r)&&(c.type==='money'||c.type==='ok'||c.type==='calc'||SEM_COB_COLS.includes(c.key));
 const tipoOpts=v=>TIPOS.map(([k,l])=>`<option value="${k}"${String(v||'').toLowerCase()===k?' selected':''}>${l}</option>`).join('');
 function colMiss(c,r){if(naoSeAplica(c,r))return false;return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
-function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&c.type!=='tipo'&&podeVer(c)&&colMiss(c,r))}
+function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&c.type!=='tipo'&&podeVer(c)&&(!ASSIST()||EDITA_ASSIST.includes(c.key))&&colMiss(c,r))}
 function hasDiv(r){const d=CALC.diferenca(r);return d!=null&&Math.abs(d)>0.009}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
 function setSync(state,txt){$('#syncDot').className='dot '+(state||'');$('#syncTxt').textContent=txt}
 function notice(m){const n=$('#notice');if(!m){n.hidden=true;return}n.textContent=m;n.hidden=false}
 
 /* ---------- render ---------- */
-const COLS_ASSIST=['tipo','cliente','razao','doc','publicacoes','adicionais','diaEnvio','contato'];
+const COLS_ASSIST=['tipo','cliente','doc','publicacoes','adicionais','diaEnvio','contato'];
+/* o que a assistente pode alterar na tabela (o servidor confere de novo) */
+const EDITA_ASSIST=['publicacoes','adicionais'];
 const podeVer=c=>!ASSIST()||COLS_ASSIST.includes(c.key);
 function visibleCols(){return cols.filter(c=>ASSIST()?podeVer(c):c.visible)}
 function view(){
@@ -549,7 +561,8 @@ function render(){
       if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
       if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
-      const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key]);
+      const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
+      if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}" data-k="publicacoes"><div class="c" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div></td>`}
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
       let extra='';
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
@@ -593,6 +606,8 @@ $('#tbody').addEventListener('click',e=>{
   const td=e.target.closest('td'); if(!td||td.querySelector('.ed')) return;
   const id=td.parentElement.dataset.id, k=td.dataset.k;
   if(k==='cliente'){openClient(id);return}
+  if(k==='publicacoes'){openPub(id);return}
+  if(ASSIST()&&!EDITA_ASSIST.includes(k)) return;
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
   if(col.type==='ok'||col.type==='tipo'||td.classList.contains('na')) return;
   startEdit(td,id,col);
@@ -836,6 +851,70 @@ function openItemsAssist(r){
   };
   draw();
 }
+/* ---------- publicações: total, ilimitado e divisão por tipo ---------- */
+const PUB_TIPOS=['Feed','Carrossel','Vídeo','Stories','Projeto','Edição de vídeo','Captação e edição de vídeo'];
+function pubPlano(r){
+  if(r&&r.pubPlano){try{const p=typeof r.pubPlano==='string'?JSON.parse(r.pubPlano):r.pubPlano;if(p&&typeof p==='object')return {ilimitado:!!p.ilimitado,total:isNum(p.total)?p.total:null,itens:Array.isArray(p.itens)?p.itens.filter(i=>i&&i.tipo):[]}}catch(e){}}
+  const t=String(r&&r.publicacoes||'');
+  if(/ilimit/i.test(t)) return {ilimitado:true,total:null,itens:[]};
+  const n=t.match(/\d+/); return {ilimitado:false,total:n?+n[0]:null,itens:[]};
+}
+function pubTexto(p){
+  const it=p.itens.map(i=>(isNum(i.qtd)&&i.qtd>0?i.qtd+' ':'')+String(i.tipo).toLowerCase());
+  const base=p.ilimitado?'Ilimitado':isNum(p.total)?`${p.total} publicaç${p.total===1?'ão':'ões'}`:'';
+  return [base,it.join(', ')].filter(Boolean).join(' · ');
+}
+const pubResumo=r=>r&&r.pubPlano?pubTexto(pubPlano(r)):String(r&&r.publicacoes||'');
+function pubTiposTodos(){
+  const s=new Map(PUB_TIPOS.map(t=>[t.toLowerCase(),t]));
+  rows.forEach(r=>{if(r.pubPlano)pubPlano(r).itens.forEach(i=>{const k=String(i.tipo).trim();if(k&&!s.has(k.toLowerCase()))s.set(k.toLowerCase(),k)})});
+  return [...s.values()];
+}
+function openPub(id){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const p=pubPlano(r);
+  let itens=p.itens.map(i=>({tipo:i.tipo,qtd:isNum(i.qtd)?i.qtd:null}));
+  let il=p.ilimitado, total=p.total;
+  const draw=()=>{
+    shell(`Publicações · ${r.cliente||''}`,`
+      <label class="pubil"><input type="checkbox" id="pubIl"${il?' checked':''}><span>Ilimitado<small>Qualquer pedido, a qualquer momento, inclusive projetos.</small></span></label>
+      <div class="field" id="pubTotWrap"${il?' hidden':''}><label for="pubTot">Total de publicações por mês</label><input id="pubTot" type="number" min="0" inputmode="numeric" value="${isNum(total)?total:''}" placeholder="Ex.: 12"></div>
+      <div class="sec">Divisão por tipo</div>
+      <p class="sub" style="margin:0;font-size:12px">Escolha um tipo da lista ou escreva um novo. ${il?'No ilimitado a quantidade é opcional.':''}</p>
+      <datalist id="dl-pubtipos">${pubTiposTodos().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+      <div class="itlist" id="pubList">${itens.map((i,n)=>`<div class="pubrow" data-n="${n}"><input class="t" list="dl-pubtipos" value="${esc(i.tipo||'')}" placeholder="Tipo (ex.: Carrossel)" aria-label="Tipo ${n+1}"><input class="q" type="number" min="0" inputmode="numeric" value="${isNum(i.qtd)?i.qtd:''}" placeholder="Qtd." aria-label="Quantidade ${n+1}"><button class="iconbtn" type="button" data-rm="${n}" aria-label="Remover tipo ${n+1}">×</button></div>`).join('')}</div>
+      <div><button class="btn" type="button" id="pubAdd">+ Adicionar tipo</button></div>
+      <div id="pubSum"></div>`,
+      `<span></span><div style="display:flex;gap:8px"><button class="btn" id="pubCancel" type="button">Cancelar</button><button class="btn primary" id="pubSave" type="button">Salvar</button></div>`);
+    const sync=()=>{
+      il=$('#pubIl').checked; const tv=$('#pubTot').value.trim(); total=tv===''?null:Math.max(0,Math.round(+tv));
+      document.querySelectorAll('.pubrow').forEach(row=>{const n=+row.dataset.n,q=row.querySelector('.q').value.trim();itens[n]={tipo:row.querySelector('.t').value.trim(),qtd:q===''?null:Math.max(0,Math.round(+q))}});
+      const soma=itens.reduce((a,i)=>a+(isNum(i.qtd)?i.qtd:0),0), el=$('#pubSum'); el.className='';
+      if(il) el.textContent=itens.filter(i=>i.tipo).length?`Ilimitado, com ${itens.filter(i=>i.tipo).length} tipo(s) listado(s).`:'Ilimitado.';
+      else if(isNum(total)){el.textContent=soma===total?`Distribuídas: ${soma} de ${total}.`:soma<total?`Distribuídas: ${soma} de ${total}. Faltam ${total-soma}.`:`Distribuídas: ${soma} de ${total}. Passou ${soma-total} do total.`;if(soma>total)el.className='warn'}
+      else el.textContent=soma?`Total pela soma dos tipos: ${soma}.`:'';
+    };
+    sync();
+    $('#pubIl').onchange=()=>{sync();draw()};
+    document.querySelector('.drawer').addEventListener('input',sync);
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();itens.splice(+b.dataset.rm,1);draw()});
+    $('#pubAdd').onclick=()=>{sync();itens.push({tipo:'',qtd:null});draw();const t=document.querySelectorAll('.pubrow .t');t[t.length-1]?.focus()};
+    $('#pubCancel').onclick=closeDrawer;
+    $('#pubSave').onclick=async()=>{
+      sync();
+      if(!canWrite){toast('Você só tem acesso de leitura.');return}
+      const limpos=itens.filter(i=>i.tipo).map(i=>({tipo:i.tipo,qtd:il?(isNum(i.qtd)&&i.qtd>0?i.qtd:null):(isNum(i.qtd)?i.qtd:0)}));
+      const soma=limpos.reduce((a,i)=>a+(i.qtd||0),0);
+      const plano={ilimitado:il,total:il?null:(isNum(total)?total:(soma||null)),itens:limpos};
+      const vazio=!plano.ilimitado&&!isNum(plano.total)&&!limpos.length;
+      const novo={pubPlano:vazio?null:JSON.stringify(plano),publicacoes:vazio?null:pubTexto(plano)};
+      $('#pubSave').disabled=true;
+      try{Object.assign(r,novo);render();await writeDoc(id,novo,'update');toast('Publicações salvas');closeDrawer()}
+      catch(e){$('#pubSave').disabled=false;handleWriteErr(e)}
+    };
+  };
+  draw();
+}
 /* ---------- acessos (só a dona) ---------- */
 function openAcessos(){
   const draw=lista=>{
@@ -1008,7 +1087,9 @@ $('#csvBtn').onclick=async()=>{
 function closeDrawer(){$('#drawerRoot').innerHTML='';if(pendingRender)render()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#drawerRoot').firstChild&&!editing)closeDrawer()});
 function shell(title,body,foot){
+  const mesmo=$('#drawerRoot .drawer')?.getAttribute('aria-label')===title; // redesenho do mesmo painel: sem animar de novo
   $('#drawerRoot').innerHTML=`<div class="scrim" id="scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="dhead"><h2>${esc(title)}</h2><button class="x" id="dx" aria-label="Fechar">×</button></div><div class="dbody">${body}</div><div class="dfoot">${foot}</div></aside>`;
+  if(mesmo) $('#drawerRoot .drawer').classList.add('noanim');
   $('#scrim').onclick=closeDrawer; $('#dx').onclick=closeDrawer;
 }
 function openClient(id){
@@ -1017,6 +1098,7 @@ function openClient(id){
   SUGGEST.forEach(ensureDatalist);
   const body=cols.filter(podeVer).map(c=>{
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
+    if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
     if(c.type==='tipo') return `<div class="field"><label for="f-${c.key}">${esc(c.label)} <span class="hint" style="color:var(--muted)">parceria, permuta e filantropia não têm cobrança</span></label><select id="f-${c.key}" name="${c.key}">${tipoOpts(r[c.key])}</select></div>`;
@@ -1025,18 +1107,20 @@ function openClient(id){
     const miss=c.required&&isEmpty(v)&&id;
     const list=SUGGEST.includes(c.key)?` list="dl-${c.key}"`:'';
     const input=c.type==='long'?`<textarea id="f-${c.key}" name="${c.key}">${esc(val)}</textarea>`
-      :`<input id="f-${c.key}" name="${c.key}" value="${esc(val)}"${list}${c.type==='money'?' inputmode="decimal" placeholder="0,00"':''}>`;
+      :`<input id="f-${c.key}" name="${c.key}" value="${esc(val)}"${list}${c.type==='money'?' inputmode="decimal" placeholder="0,00"':''}${ASSIST()&&(id||c.key!=='cliente')?' disabled':''}>`;
     return `<div class="field${miss?' miss':''}"><label for="f-${c.key}">${esc(c.label)}${c.required?'<span class="req" style="color:var(--warn)">•</span>':''}${miss?'<span class="hint">falta preencher</span>':''}</label>${input}</div>`;
   }).join('');
   const foot=(id?`<button class="btn danger" id="delBtn" type="button">Excluir cliente</button>`:'<span></span>')+`<div style="display:flex;gap:8px"><button class="btn" id="cancelBtn" type="button">Cancelar</button><button class="btn primary" id="saveBtn" type="button">${id?'Salvar alterações':'Adicionar cliente'}</button></div>`;
   shell(id?(r.cliente||'Cliente'):'Novo cliente',body,foot);
   $('#cancelBtn').onclick=closeDrawer;
   if($('#goItems')) $('#goItems').onclick=()=>openItems(id);
+  if($('#goPub')) $('#goPub').onclick=()=>openPub(id);
+  if(ASSIST()&&id){$('#saveBtn').hidden=true;$('#cancelBtn').textContent='Fechar'}
   $('#f-cliente')?.focus();
   $('#saveBtn').onclick=async()=>{
     if(!canWrite){toast('Você só tem acesso de leitura.');return}
     const data={};
-    for(const c of cols){if(c.type==='calc'||!podeVer(c)||(c.type==='tipo'&&ASSIST()))continue;const el=document.getElementById('f-'+c.key);if(!el)continue;
+    for(const c of cols){if(c.type==='calc'||!podeVer(c)||(c.type==='tipo'&&ASSIST())||(ASSIST()&&c.key!=='cliente'))continue;const el=document.getElementById('f-'+c.key);if(!el)continue;
       if(c.type==='ok'||c.type==='tipo'){data[c.key]=el.value||null;continue}
       const v=toValue(c,el.value); if(v&&v.err){toast(`${c.label}: valor inválido. Use algo como 1.380,00.`);el.focus();return} data[c.key]=v}
     if(isEmpty(data.cliente)){toast('Dê um nome ao cliente.');$('#f-cliente').focus();return}
