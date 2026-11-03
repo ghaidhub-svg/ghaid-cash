@@ -109,6 +109,9 @@ td.money .c,td.calc .c{text-align:right;font-family:var(--f-mono);font-size:13px
 td.mono .c{font-family:var(--f-mono);font-size:13px}
 td.calc .c{cursor:default;color:var(--muted)}
 td .c.okv{color:var(--good);font-weight:700}
+td.ok .c{cursor:pointer;user-select:none}
+.okchk{display:flex;align-items:center;gap:8px;height:var(--ctl);font-size:14px;font-weight:600;cursor:pointer}
+.okchk input{width:18px;height:18px;margin:0;accent-color:var(--good)}
 td.calc.strong .c{color:var(--fg);font-weight:700}
 tfoot td{position:sticky;bottom:0;z-index:2;background:var(--surface-2);border-top:2px solid var(--fg);font-weight:700}
 tfoot td .c{cursor:default;font-weight:700;color:var(--fg)}
@@ -359,7 +362,7 @@ const DEFAULT_COLS=[
  {key:'vencimento',label:'Vencimento',type:'mono',off:true},
  {key:'valorNF',label:'Valor NF',type:'money',off:true},
  {key:'obs',label:'Observações',type:'long',off:true},
- {key:'status',label:'Status cobrança',type:'text',required:true},
+ {key:'status',label:'Status cobrança',type:'ok',required:true},
 ];
 /* mês de referência */
 const nowD=new Date();
@@ -400,7 +403,9 @@ function fmt(col,r){
   if(col.type==='money') return isNum(v)?brl.format(v):String(v);
   return String(v);
 }
-function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&isEmpty(r[c.key]))}
+const isOk=v=>/\bok\b/i.test(String(v??''));
+function colMiss(c,r){return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
+function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&colMiss(c,r))}
 function hasDiv(r){const d=CALC.diferenca(r);return d!=null&&Math.abs(d)>0.009}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
 function setSync(state,txt){$('#syncDot').className='dot '+(state||'');$('#syncTxt').textContent=txt}
@@ -469,11 +474,11 @@ function render(){
       if(c.key==='cliente'){
         return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa"><span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
       }
+      if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}" title="${ok?'Boleto enviado. Clique para desmarcar':'Boleto não enviado. Clique para marcar OK'}">${ok?'OK':'falta'}</div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key]);
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
       let extra='';
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
-      if(c.key==='status'&&/\bok\b/i.test(txt)) extra+=' okv';
       if(c.items){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc+': '+brl.format(i.valor||0)).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}</span>`:'+ adicionar'}</div></td>`}
       return `<td class="${cls}" data-k="${c.key}"><div class="c${extra}" title="${esc(txt)}">${miss?'preencher':esc(txt)}</div></td>`;
     }).join('')+'</tr>';
@@ -513,8 +518,16 @@ $('#tbody').addEventListener('click',e=>{
   const id=td.parentElement.dataset.id, k=td.dataset.k;
   if(k==='cliente'){openClient(id);return}
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
+  if(col.type==='ok'){toggleOk(id,col);return}
   startEdit(td,id,col);
 });
+async function toggleOk(id,col){
+  if(!canWrite){toast('Você só tem acesso de leitura.');return}
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const to=isOk(r[col.key])?null:'OK', prev=r[col.key];
+  r[col.key]=to; render();
+  try{await writeDoc(id,{[col.key]:to},'update')}catch(e){r[col.key]=prev;render();handleWriteErr(e)}
+}
 function startEdit(td,id,col){
   if(!canWrite){toast('Você só tem acesso de leitura.');return}
   const r=rows.find(x=>x.id===id); if(!r) return;
@@ -750,7 +763,7 @@ function renderDash(act,nArq){
 
   // campos que faltam
   const req=cols.filter(c=>c.required&&c.type!=='calc');
-  const miss=req.map(c=>({c,n:act.filter(r=>isEmpty(r[c.key])).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+  const miss=req.map(c=>({c,n:act.filter(r=>colMiss(c,r)).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
   const mmax=Math.max(1,...miss.map(x=>x.n));
   $('#chMiss').innerHTML=miss.length?miss.slice(0,5).map(x=>`<div class="hb miss" tabindex="0" data-missfilter="1" data-tip="<strong>${esc(x.c.label)}</strong>falta em ${x.n} de ${act.length} clientes. Clique para ver."><span class="l">${esc(x.c.label)}</span><span class="t"><span class="b" style="width:${(x.n/mmax*100).toFixed(2)}%"></span></span><span class="n">${x.n}</span></div>`).join('')
     :'<div class="okmsg"><b>✓</b> Todos os campos obrigatórios estão preenchidos.</div>';
@@ -798,6 +811,7 @@ function openClient(id){
   const body=cols.map(c=>{
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
+    if(c.type==='ok'){const ok=isOk(r[c.key]);return `<div class="field${!ok&&id?' miss':''}"><label for="f-${c.key}">${esc(c.label)}${!ok&&id?'<span class="hint">falta</span>':''}</label><label class="okchk"><input type="checkbox" id="f-${c.key}" name="${c.key}"${ok?' checked':''}> OK, boleto enviado</label></div>`}
     const v=r[c.key]; const val=isEmpty(v)?'':(c.type==='money'&&isNum(v)?String(v).replace('.',','):String(v));
     const miss=c.required&&isEmpty(v)&&id;
     const list=SUGGEST.includes(c.key)?` list="dl-${c.key}"`:'';
@@ -814,6 +828,7 @@ function openClient(id){
     if(!canWrite){toast('Você só tem acesso de leitura.');return}
     const data={};
     for(const c of cols){if(c.type==='calc')continue;const el=document.getElementById('f-'+c.key);if(!el)continue;
+      if(c.type==='ok'){data[c.key]=el.checked?'OK':null;continue}
       const v=toValue(c,el.value); if(v&&v.err){toast(`${c.label}: valor inválido. Use algo como 1.380,00.`);el.focus();return} data[c.key]=v}
     if(isEmpty(data.cliente)){toast('Dê um nome ao cliente.');$('#f-cliente').focus();return}
     $('#saveBtn').disabled=true;
