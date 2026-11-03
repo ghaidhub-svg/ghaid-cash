@@ -133,6 +133,12 @@ td.namecell .c{display:flex;align-items:center;gap:8px;font-weight:600;cursor:po
 .act.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
 tr.archived td .c{opacity:.6}
 td.namecell .c span.nm{overflow:hidden;text-overflow:ellipsis}
+.star{flex:none;color:var(--accent);font-size:15px;line-height:1;margin-right:-2px}
+td.na .c{cursor:default;background:var(--surface-2)}
+td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
+.tiposel{flex:1;min-height:42px;min-width:130px;border:0;background:transparent;color:inherit;font:inherit;padding:0 10px 0 14px;cursor:pointer}
+.tiposel option{color:var(--fg);background:var(--surface)}
+td.tipo .c.livre{color:var(--accent);font-weight:600}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
 .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 tr.haspend td.namecell{box-shadow:inset 3px 0 0 var(--warn-line)}
@@ -378,6 +384,7 @@ const DEFAULT_COLS=[
  {key:'valorNF',label:'Valor NF',type:'money',off:true},
  {key:'obs',label:'Observações',type:'long',off:true},
  {key:'status',label:'Status cobrança',type:'ok',required:true},
+ {key:'tipo',label:'Tipo',type:'tipo'},
 ];
 /* mês de referência */
 const nowD=new Date();
@@ -449,8 +456,15 @@ async function migrarStatus(){
     toast(limpar?'Observações arrumadas: ficaram só as anotações da equipe':`${mud.length} status com texto foram para Observações`);
   }catch(e){statusMigrado=false;handleWriteErr(e)}
 }
-function colMiss(c,r){return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
-function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&colMiss(c,r))}
+/* Tipo do cliente: quem não é pagante (parceria, permuta, filantropia) ganha estrela e não tem cobrança */
+const TIPOS=[['','Pagante'],['parceria','Parceria'],['permuta','Permuta'],['filantropia','Filantropia']];
+const tipoLabel=v=>(TIPOS.find(t=>t[0]===String(v||'').toLowerCase())||TIPOS[0])[1];
+const semCobranca=r=>!!r&&TIPOS.slice(1).some(t=>t[0]===String(r.tipo||'').toLowerCase());
+const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
+const naoSeAplica=(c,r)=>semCobranca(r)&&(c.type==='money'||c.type==='ok'||c.type==='calc'||SEM_COB_COLS.includes(c.key));
+const tipoOpts=v=>TIPOS.map(([k,l])=>`<option value="${k}"${String(v||'').toLowerCase()===k?' selected':''}>${l}</option>`).join('');
+function colMiss(c,r){if(naoSeAplica(c,r))return false;return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
+function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&c.type!=='tipo'&&colMiss(c,r))}
 function hasDiv(r){const d=CALC.diferenca(r);return d!=null&&Math.abs(d)>0.009}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
 function setSync(state,txt){$('#syncDot').className='dot '+(state||'');$('#syncTxt').textContent=txt}
@@ -517,8 +531,10 @@ function render(){
     return `<tr data-id="${esc(r.id)}" class="${m.length&&!r.arquivado?'haspend':''}${r.arquivado?' archived':''}">`+vc.map(c=>{
       const txt=fmt(c,r);
       if(c.key==='cliente'){
-        return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa"><span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
+        return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa">${semCobranca(r)?`<span class="star" title="${esc(tipoLabel(r.tipo))}" aria-label="${esc(tipoLabel(r.tipo))}">★</span>`:''}<span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
       }
+      if(naoSeAplica(c,r)) return `<td class="na ${c.type}" data-k="${c.key}"><div class="c"></div></td>`;
+      if(c.type==='tipo') return `<td class="tipo" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key]);
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
@@ -531,7 +547,7 @@ function render(){
   $('#tfoot').innerHTML=vc.map(c=>{
     if(c.key==='cliente') return `<td class="sticky"><div class="c">Total · ${list.length} cliente${list.length>1?'s':''}</div></td>`;
     if(c.type!=='money'&&c.type!=='calc') return '<td><div class="c"></div></td>';
-    const vals=list.map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
+    const vals=list.filter(r=>!semCobranca(r)).map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
     return `<td class="money"><div class="c">${vals.length?brl.format(vals.reduce((a,b)=>a+b,0)):''}</div></td>`;
   }).join('');
 }
@@ -563,15 +579,23 @@ $('#tbody').addEventListener('click',e=>{
   const id=td.parentElement.dataset.id, k=td.dataset.k;
   if(k==='cliente'){openClient(id);return}
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
-  if(col.type==='ok') return;
+  if(col.type==='ok'||col.type==='tipo'||td.classList.contains('na')) return;
   startEdit(td,id,col);
 });
 const okOpts=ok=>`<option value=""${ok?'':' selected'}>Não enviado</option><option value="OK"${ok?' selected':''}>OK</option>`;
 $('#tbody').addEventListener('change',e=>{
+  const ts=e.target.closest('.tiposel');
+  if(ts){const id=ts.closest('tr').dataset.id;setCampo(id,'tipo',ts.value||null);return}
   const sel=e.target.closest('.oksel'); if(!sel) return;
   const td=sel.closest('td'), col=cols.find(c=>c.key===td.dataset.k);
   if(col) setOk(td.parentElement.dataset.id,col,sel.value||null);
 });
+async function setCampo(id,key,to){
+  if(!canWrite){toast('Você só tem acesso de leitura.');render();return}
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const prev=r[key]; r[key]=to; render();
+  try{await writeDoc(id,{[key]:to},'update')}catch(e){r[key]=prev;render();handleWriteErr(e)}
+}
 async function setOk(id,col,to){
   if(!canWrite){toast('Você só tem acesso de leitura.');render();return}
   const r=rows.find(x=>x.id===id); if(!r) return;
@@ -786,7 +810,7 @@ $('#colbar').addEventListener('click',e=>{
   if(a){const all=a.dataset.all==='1';cols.forEach(c=>{if(!c.locked)c.visible=all?true:!DEFAULT_COLS.find(d=>d.key===c.key)?.off});saveCols();render()}
 });
 /* ---------- dashboard ---------- */
-const tm=r=>CALC.totalMes(r);
+const tm=r=>semCobranca(r)?null:CALC.totalMes(r);
 const brlC=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1});
 const numC=new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1});
 const pct=n=>Math.round(n*100)+'%';
@@ -922,6 +946,7 @@ function openClient(id){
   const body=cols.map(c=>{
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
+    if(c.type==='tipo') return `<div class="field"><label for="f-${c.key}">${esc(c.label)} <span class="hint" style="color:var(--muted)">parceria, permuta e filantropia não têm cobrança</span></label><select id="f-${c.key}" name="${c.key}">${tipoOpts(r[c.key])}</select></div>`;
     if(c.type==='ok'){const ok=isOk(r[c.key]);return `<div class="field${ok?' okv':(id?' miss':'')}"><label for="f-${c.key}">${esc(c.label)}</label><select id="f-${c.key}" name="${c.key}">${okOpts(ok)}</select></div>`}
     const v=r[c.key]; const val=isEmpty(v)?'':(c.type==='money'&&isNum(v)?String(v).replace('.',','):String(v));
     const miss=c.required&&isEmpty(v)&&id;
@@ -939,7 +964,7 @@ function openClient(id){
     if(!canWrite){toast('Você só tem acesso de leitura.');return}
     const data={};
     for(const c of cols){if(c.type==='calc')continue;const el=document.getElementById('f-'+c.key);if(!el)continue;
-      if(c.type==='ok'){data[c.key]=el.value||null;continue}
+      if(c.type==='ok'||c.type==='tipo'){data[c.key]=el.value||null;continue}
       const v=toValue(c,el.value); if(v&&v.err){toast(`${c.label}: valor inválido. Use algo como 1.380,00.`);el.focus();return} data[c.key]=v}
     if(isEmpty(data.cliente)){toast('Dê um nome ao cliente.');$('#f-cliente').focus();return}
     $('#saveBtn').disabled=true;
