@@ -145,6 +145,7 @@ td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
 td.tipo .c.livre{color:var(--accent);font-weight:600}
 .so-assist{display:none}.assist .so-assist{display:inline}.assist .so-dona{display:none!important}
 .assist #delBtn{display:none!important}
+.assist .sticky[data-k="cliente"]{left:0}
 td.pubcell .c{cursor:pointer}
 .pubil{display:flex;align-items:center;gap:10px;min-height:var(--ctl);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font-size:14px;font-weight:600}
 .pubil input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
@@ -493,7 +494,7 @@ function setSync(state,txt){$('#syncDot').className='dot '+(state||'');$('#syncT
 function notice(m){const n=$('#notice');if(!m){n.hidden=true;return}n.textContent=m;n.hidden=false}
 
 /* ---------- render ---------- */
-const COLS_ASSIST=['tipo','cliente','publicacoes','adicionais'];
+const COLS_ASSIST=['cliente','publicacoes','adicionais'];
 /* o que a assistente pode alterar na tabela (o servidor confere de novo) */
 const EDITA_ASSIST=['publicacoes','adicionais'];
 const podeVer=c=>!ASSIST()||COLS_ASSIST.includes(c.key);
