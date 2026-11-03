@@ -233,6 +233,14 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 .field input,.field textarea{border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;background:var(--surface);color:var(--fg)}
 .field textarea{min-height:80px;resize:vertical}
 .field.miss input,.field.miss textarea{border-color:var(--warn-line);background:var(--warn-soft)}
+.imp{display:flex;flex-direction:column;gap:6px}
+.imp-row{display:flex;align-items:center;gap:10px;min-height:var(--ctl);padding:4px 10px;border:1px solid var(--line);border-radius:var(--r);font-size:13px}
+.imp-row input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
+.imp-row .nm{font-weight:600;flex:1}
+.imp-row .tag{font-size:11px;font-weight:600;color:var(--muted)}
+.imp-row.novo .tag{color:var(--good)}
+.imp-row.sim .tag{color:var(--warn)}
+#impTxt{min-height:260px}
 .field .hint{font-size:11px;color:var(--warn);font-weight:600}
 .field .calcv{font-family:var(--f-mono);padding:8px 0;color:var(--muted)}
 .x{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;font-size:20px;color:var(--muted)}
@@ -338,6 +346,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
     <button class="btn" id="resetOkBtn" type="button" title="Marca todos os clientes ativos como não enviado">Desmarcar OKs</button>
     <button class="btn" id="colsBtn" type="button">Colunas</button>
     <button class="btn" id="csvBtn" type="button" hidden>Exportar CSV</button>
+    <button class="btn" id="listBtn" type="button" title="Cola vários nomes, confere quem já existe e inclui só os que faltam">Colar lista</button>
     <button class="btn primary" id="newBtn" type="button">+ Novo cliente</button>
   </div>
   <div class="colbar" id="colbar" role="group" aria-label="Mostrar colunas"></div>
@@ -436,7 +445,7 @@ async function migrarStatus(){
     if(limpar){cfgFlags={...cfgFlags,obsLimpa:new Date().toISOString()};await saveCols()}
     if(!mud.length) return;
     mud.forEach(([r,n])=>Object.assign(r,n)); render();
-    await Promise.all(mud.map(([r,n])=>writeDoc(r.id,n,'update')));
+    await writeMany(mud.map(([r,n])=>[r.id,n]));
     toast(limpar?'Observações arrumadas: ficaram só as anotações da equipe':`${mud.length} status com texto foram para Observações`);
   }catch(e){statusMigrado=false;handleWriteErr(e)}
 }
@@ -578,9 +587,9 @@ $('#resetOkBtn').addEventListener('click',async()=>{
   if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent=`Desmarcar ${alvo.length} OK${alvo.length>1?'s':''}?`;b.classList.add('armed');
     setTimeout(()=>{b.dataset.armed='';b.textContent='Desmarcar OKs';b.classList.remove('armed')},4000);return}
   b.dataset.armed='';b.textContent='Desmarcar OKs';b.classList.remove('armed');
-  alvo.forEach(r=>r.status=null); render();
-  try{await Promise.all(alvo.map(r=>writeDoc(r.id,{status:null},'update')));toast(`${alvo.length} OK${alvo.length>1?'s':''} desmarcado${alvo.length>1?'s':''}. Todos como não enviado.`)}
-  catch(e){handleWriteErr(e)}
+  alvo.forEach(r=>r.status=null); render(); b.disabled=true;
+  try{await writeMany(alvo.map(r=>[r.id,{status:null}]),(n,t)=>{b.textContent=`Desmarcando ${n}/${t}…`});b.disabled=false;b.textContent='Desmarcar OKs';toast(`${alvo.length} OK${alvo.length>1?'s':''} desmarcado${alvo.length>1?'s':''}. Todos como não enviado.`)}
+  catch(e){b.disabled=false;b.textContent='Desmarcar OKs';handleWriteErr(e)}
 });
 function startEdit(td,id,col){
   if(!canWrite){toast('Você só tem acesso de leitura.');return}
@@ -843,6 +852,50 @@ document.querySelector('.dash').addEventListener('keydown',e=>{if(e.key==='Enter
  document.addEventListener('scroll',()=>{tip.hidden=true},true);}
 
 $('#newBtn').onclick=()=>openClient(null);
+/* ---------- colar lista: confere nomes e inclui só os que faltam ---------- */
+const normNome=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+const GENERICAS=new Set(['construtora','const','imobiliaria','imob','imoveis','instituto','incorporadora','ltda','grupo','dra','dr','res','de','da','do','das','dos','e']);
+const util=t=>t&&!GENERICAS.has(t)&&(t.length>=3||/\d/.test(t));
+function quase(a,b){ // diferença de no máximo uma letra (tomielo x tomiello)
+  if(Math.min(a.length,b.length)<5||Math.abs(a.length-b.length)>1) return false;
+  let i=0,j=0,d=0; while(i<a.length&&j<b.length){if(a[i]===b[j]){i++;j++;continue}if(++d>1)return false;if(a.length>b.length)i++;else if(b.length>a.length)j++;else{i++;j++}}
+  return d+(a.length-i)+(b.length-j)<=1;
+}
+function parecido(nome){
+  const n=normNome(nome), junto=n.replace(/ /g,''), tk=n.split(' ').filter(util);
+  const exato=rows.find(r=>[r.cliente,r.razao].some(x=>{const m=normNome(x);return m&&(m===n||m.replace(/ /g,'')===junto)}));
+  if(exato) return {tipo:'existe',r:exato};
+  const sim=rows.find(r=>{const o=(normNome(r.cliente)+' '+normNome(r.razao)).split(' ').filter(util);
+    return tk.some(a=>o.some(b=>a===b||(Math.min(a.length,b.length)>=3&&(a.startsWith(b)||b.startsWith(a)))||quase(a,b)))});
+  return sim?{tipo:'sim',r:sim}:{tipo:'novo'};
+}
+$('#listBtn').onclick=()=>{
+  shell('Colar lista de clientes',`<div class="field"><label for="impTxt">Um cliente por linha. Números e marcadores no começo da linha são ignorados.</label><textarea id="impTxt" placeholder="ANVAINER&#10;BHAZE&#10;CARA OU COROA"></textarea></div><div id="impRes" class="imp"></div>`,
+    `<span></span><div style="display:flex;gap:8px"><button class="btn" id="impCheck" type="button">Conferir</button><button class="btn primary" id="impGo" type="button" disabled>Incluir selecionados</button></div>`);
+  $('#impTxt').focus();
+  let itens=[];
+  $('#impCheck').onclick=()=>{
+    const vistos=new Set();
+    itens=$('#impTxt').value.split(/\n/).map(l=>l.replace(/^\s*(\d+\s*[.)\-:]|[-*•])\s*/,'').replace(/[’`]/g,"'").trim()).filter(l=>{const k=normNome(l);if(!k||vistos.has(k))return false;vistos.add(k);return true})
+      .map(nome=>({nome,...parecido(nome)}));
+    const cont={existe:0,sim:0,novo:0}; itens.forEach(i=>cont[i.tipo]++);
+    $('#impRes').innerHTML=itens.length?`<div class="sub" style="font-size:13px;margin:6px 0">${cont.novo} novo${cont.novo!==1?'s':''} · ${cont.sim} parecido${cont.sim!==1?'s':''} · ${cont.existe} já no sistema</div>`+
+      itens.map((i,k)=>`<label class="imp-row ${i.tipo}">${i.tipo==='existe'?'<span style="width:18px"></span>':`<input type="checkbox" data-k="${k}"${i.tipo==='novo'?' checked':''}>`}<span class="nm">${esc(i.nome)}</span><span class="tag">${i.tipo==='novo'?'novo':i.tipo==='sim'?`parecido com ${esc(i.r.cliente)}${i.r.arquivado?' (arquivado)':''}`:`já existe${i.r.arquivado?' (arquivado)':''}`}</span></label>`).join('')
+      :'<div class="sub">Nenhum nome encontrado.</div>';
+    const upd=()=>{const n=document.querySelectorAll('#impRes input:checked').length;$('#impGo').disabled=!n;$('#impGo').textContent=n?`Incluir ${n} cliente${n>1?'s':''}`:'Incluir selecionados'};
+    $('#impRes').onchange=upd; upd();
+  };
+  $('#impGo').onclick=async()=>{
+    if(!canWrite){toast('Você só tem acesso de leitura.');return}
+    const sel=[...document.querySelectorAll('#impRes input:checked')].map(x=>itens[+x.dataset.k]);
+    if(!sel.length) return;
+    $('#impGo').disabled=true;
+    try{
+      await writeMany(sel.map(i=>[db.collection('clientes').doc().id,{cliente:i.nome.toUpperCase()},'set']),(n,t)=>{$('#impGo').textContent=`Incluindo ${n}/${t}…`});
+      toast(`${sel.length} cliente${sel.length>1?'s':''} incluído${sel.length>1?'s':''}`);closeDrawer();
+    }catch(e){$('#impGo').disabled=false;handleWriteErr(e)}
+  };
+};
 $('#colsBtn').onclick=openCols;
 $('#csvBtn').onclick=async()=>{
   const vc=visibleCols(); const list=view();
@@ -1036,11 +1089,19 @@ function enterApp(){
   },err=>{clearTimeout(loadTimer);loaded=true;setSync('off','Conexão perdida');notice('A conexão com o banco caiu. Recarregue a página para continuar editando.');render()}));
 }
 /* ---------- ponte com o Google Apps Script ---------- */
+let bulk=0, refreshAll=()=>Promise.resolve();
+/* grava vários clientes em fila (o Apps Script grava um por vez) e só relê a planilha no fim */
+async function writeMany(list,onProg){
+  bulk++; let n=0;
+  try{for(const [id,data,mode] of list){await writeDoc(id,data,mode||'update');n++;onProg&&onProg(n,list.length)}}
+  finally{bulk--; refreshAll().catch(()=>{})}
+}
 const GS=(fn,...a)=>new Promise((res,rej)=>{google.script.run.withSuccessHandler(res).withFailureHandler(e=>rej({code:'unavailable',message:String(e&&e.message||e)}))[fn](...a)});
 function makeDb(){
   const subs={clientes:[],config:[]};
   const snap=list=>({docs:list.map(o=>{const {id,...d}=o;return {id,exists:true,data:()=>d}}),metadata:{fromCache:false,hasPendingWrites:false}});
-  const refresh=()=>GS('listar').then(l=>subs.clientes.forEach(f=>f(snap(l))));
+  const refresh=()=>bulk>0?Promise.resolve():GS('listar').then(l=>subs.clientes.forEach(f=>f(snap(l))));
+  refreshAll=refresh;
   const refreshCfg=()=>GS('lerConfig').then(c=>subs.config.forEach(f=>f({exists:!!c,data:()=>c})));
   const ref=path=>{
     const [col,id]=path.split('/');
