@@ -403,7 +403,23 @@ function fmt(col,r){
   if(col.type==='money') return isNum(v)?brl.format(v):String(v);
   return String(v);
 }
-const isOk=v=>/\bok\b/i.test(String(v??''));
+const isOk=v=>String(v??'').trim().toUpperCase()==='OK';
+/* Status cobrança aceita só OK ou vazio. Texto antigo no status vai para Observações. */
+let statusMigrado=false;
+function migrarStatus(){
+  if(statusMigrado||!canWrite) return; statusMigrado=true;
+  const alvo=rows.filter(r=>!isEmpty(r.status)&&!isOk(r.status));
+  if(!alvo.length) return;
+  Promise.all(alvo.map(r=>{
+    const txt=String(r.status).trim(), temOk=/\bok\b/i.test(txt);
+    const info=temOk?txt.replace(/\bok\b/ig,'').replace(/\s+/g,' ').trim():txt;
+    const obs=[isEmpty(r.obs)?'':String(r.obs).trim(),info?`Cobrança: ${info}`:''].filter(Boolean).join(' ');
+    const novo={status:temOk?'OK':null,obs:obs||null};
+    Object.assign(r,novo);
+    return writeDoc(r.id,novo,'update');
+  })).then(()=>{toast(`${alvo.length} status com texto foram para Observações`);render()})
+    .catch(e=>{statusMigrado=false;handleWriteErr(e)});
+}
 function colMiss(c,r){return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
 function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&colMiss(c,r))}
 function hasDiv(r){const d=CALC.diferenca(r);return d!=null&&Math.abs(d)>0.009}
@@ -972,7 +988,7 @@ function enterApp(){
   unsubs.push(db.doc('config/tabela').onSnapshot(s=>{if(s.exists&&!document.querySelector('.colrow')){applyCfg(s.data());render()}},()=>{}));
   unsubs.push(db.collection('clientes').onSnapshot(snap=>{
     rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(!snap.metadata.fromCache){loaded=true;clearTimeout(loadTimer);setSync('on','Salvo na nuvem')}
+    if(!snap.metadata.fromCache){loaded=true;clearTimeout(loadTimer);setSync('on','Salvo na nuvem');migrarStatus()}
     else if(rows.length) loaded=true;
     render();
   },err=>{clearTimeout(loadTimer);loaded=true;setSync('off','Conexão perdida');notice('A conexão com o banco caiu. Recarregue a página para continuar editando.');render()}));
