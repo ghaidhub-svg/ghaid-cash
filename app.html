@@ -411,20 +411,34 @@ function fmt(col,r){
 }
 const isOk=v=>String(v??'').trim().toUpperCase()==='OK';
 /* Status cobrança aceita só OK ou vazio. Texto antigo no status vai para Observações. */
-let statusMigrado=false;
-function migrarStatus(){
-  if(statusMigrado||!canWrite) return; statusMigrado=true;
-  const alvo=rows.filter(r=>!isEmpty(r.status)&&!isOk(r.status));
-  if(!alvo.length) return;
-  Promise.all(alvo.map(r=>{
-    const txt=String(r.status).trim(), temOk=/\bok\b/i.test(txt);
-    const info=temOk?txt.replace(/\bok\b/ig,'').replace(/\s+/g,' ').trim():txt;
-    const obs=[isEmpty(r.obs)?'':String(r.obs).trim(),info?`Cobrança: ${info}`:''].filter(Boolean).join(' ');
-    const novo={status:temOk?'OK':null,obs:obs||null};
-    Object.assign(r,novo);
-    return writeDoc(r.id,novo,'update');
-  })).then(()=>{toast(`${alvo.length} status com texto foram para Observações`);render()})
-    .catch(e=>{statusMigrado=false;handleWriteErr(e)});
+/* Arrumação dos dados na abertura:
+   1) status com texto: o texto vai para Observações e o status fica só OK ou vazio;
+   2) uma vez só (marca obsLimpa na config): Observações perde os avisos criados pelo sistema
+      na importação e fica só com as anotações da equipe (as que vieram do status). */
+let statusMigrado=false, cfgLoaded=false, cfgFlags={};
+const frase=t=>{t=String(t).replace(/\s+/g,' ').trim();return t?t.charAt(0).toUpperCase()+t.slice(1).toLowerCase():''};
+async function migrarStatus(){
+  if(statusMigrado||!canWrite||!cfgLoaded||!loaded) return; statusMigrado=true;
+  const limpar=!cfgFlags.obsLimpa;
+  const mud=[];
+  rows.forEach(r=>{
+    let status=isEmpty(r.status)?null:String(r.status).trim(), nota='';
+    if(status&&!isOk(status)){const temOk=/\bok\b/i.test(status);nota=frase(temOk?status.replace(/\bok\b/ig,' '):status);status=temOk?'OK':null}
+    let base=isEmpty(r.obs)?'':String(r.obs).trim();
+    if(limpar){const m=base.match(/Cobrança:\s*(.+)$/);base=m?frase(m[1]):''}
+    const obs=[base,nota].filter(Boolean).join(' ')||null;
+    const novo={};
+    if((status||null)!==(isEmpty(r.status)?null:r.status)) novo.status=status;
+    if(obs!==(isEmpty(r.obs)?null:r.obs)) novo.obs=obs;
+    if(Object.keys(novo).length) mud.push([r,novo]);
+  });
+  try{
+    if(limpar){cfgFlags={...cfgFlags,obsLimpa:new Date().toISOString()};await saveCols()}
+    if(!mud.length) return;
+    mud.forEach(([r,n])=>Object.assign(r,n)); render();
+    await Promise.all(mud.map(([r,n])=>writeDoc(r.id,n,'update')));
+    toast(limpar?'Observações arrumadas: ficaram só as anotações da equipe':`${mud.length} status com texto foram para Observações`);
+  }catch(e){statusMigrado=false;handleWriteErr(e)}
 }
 function colMiss(c,r){return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
 function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&colMiss(c,r))}
@@ -641,9 +655,13 @@ let cfgChain=Promise.resolve();
 function saveCols(){
   if(!db) return;
   const data={cols:cols.map(({key,label,type,visible,required,custom,locked})=>({key,label,type:type||'text',visible:!!visible,required:!!required,custom:!!custom,locked:!!locked}))};
-  cfgChain=cfgChain.catch(()=>{}).then(()=>db.doc('config/tabela').set(data)).catch(handleWriteErr);
+  if(Object.keys(cfgFlags).length) data.flags=cfgFlags;
+  const p=cfgChain.catch(()=>{}).then(()=>db.doc('config/tabela').set(data));
+  cfgChain=p.catch(handleWriteErr);
+  return p;
 }
 function applyCfg(stored){
+  if(stored&&stored.flags) cfgFlags=stored.flags;
   if(!stored||!Array.isArray(stored.cols)){return}
   const byKey=Object.fromEntries(DEFAULT_COLS.map(c=>[c.key,c]));
   const out=[];
@@ -1009,7 +1027,7 @@ function enterApp(){
   clearTimeout(loadTimer);
   loadTimer=setTimeout(()=>{if(!loaded){setSync('off','Sem resposta do banco');$('#emptyState').innerHTML='<strong>Não consegui carregar os dados ainda</strong>Verifique a conexão. A tabela aparece assim que o banco responder.'}},10000);
   if(!downloads&&window.claude) window.claude.use('downloads').then(d=>{if(d){downloads=d;$('#csvBtn').hidden=false}});
-  unsubs.push(db.doc('config/tabela').onSnapshot(s=>{if(s.exists&&!document.querySelector('.colrow')){applyCfg(s.data());render()}},()=>{}));
+  unsubs.push(db.doc('config/tabela').onSnapshot(s=>{if(s.exists&&s.data()&&s.data().flags)cfgFlags=s.data().flags;if(s.exists&&!document.querySelector('.colrow')){applyCfg(s.data());render()}cfgLoaded=true;migrarStatus()},()=>{}));
   unsubs.push(db.collection('clientes').onSnapshot(snap=>{
     rows=snap.docs.map(d=>({id:d.id,...d.data()}));
     if(!snap.metadata.fromCache){loaded=true;clearTimeout(loadTimer);setSync('on','Salvo na nuvem');migrarStatus()}
