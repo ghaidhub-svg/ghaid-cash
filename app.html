@@ -150,6 +150,10 @@ td.pubcell .c{cursor:pointer}
 .pubil input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
 .pubil small{display:block;font-weight:400;color:var(--muted);font-size:12px}
 .pubrow{display:grid;grid-template-columns:minmax(0,1fr) 90px 40px;gap:8px;align-items:center}
+.pubnome{font-size:14px;font-weight:500}
+.pubnome small{color:var(--muted);font-weight:400;font-size:12px}
+.pubresto{border-top:1px solid var(--line);padding-top:8px;margin-top:4px}
+.pubresto .q{text-align:right;padding-right:12px;font-weight:700}
 .pubrow input{height:var(--ctl);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0}
 .pubrow input.q{text-align:right}
 #pubSum{font-size:13px;font-weight:600}
@@ -852,7 +856,9 @@ function openItemsAssist(r){
   draw();
 }
 /* ---------- publicações: total, ilimitado e divisão por tipo ---------- */
-const PUB_TIPOS=['Feed','Carrossel','Vídeo','Stories','Projeto','Edição de vídeo','Captação e edição de vídeo'];
+const PUB_NORMAL='Post normal';
+const PUB_TIPOS=['Vídeo','Carrossel','Stories','Projeto','Edição de vídeo','Captação e edição de vídeo'];
+const ehNormal=t=>/^(post normal|feed|publica[cç][aã]o normal)$/i.test(String(t||'').trim());
 function pubPlano(r){
   if(r&&r.pubPlano){try{const p=typeof r.pubPlano==='string'?JSON.parse(r.pubPlano):r.pubPlano;if(p&&typeof p==='object')return {ilimitado:!!p.ilimitado,total:isNum(p.total)?p.total:null,itens:Array.isArray(p.itens)?p.itens.filter(i=>i&&i.tipo):[]}}catch(e){}}
   const t=String(r&&r.publicacoes||'');
@@ -860,53 +866,67 @@ function pubPlano(r){
   const n=t.match(/\d+/); return {ilimitado:false,total:n?+n[0]:null,itens:[]};
 }
 function pubTexto(p){
-  const it=p.itens.map(i=>(isNum(i.qtd)&&i.qtd>0?i.qtd+' ':'')+String(i.tipo).toLowerCase());
-  const base=p.ilimitado?'Ilimitado':isNum(p.total)?`${p.total} publicaç${p.total===1?'ão':'ões'}`:'';
+  if(p.ilimitado) return 'Ilimitado';
+  const base=isNum(p.total)?`${p.total} publicaç${p.total===1?'ão':'ões'}`:'';
+  const it=p.itens.filter(i=>isNum(i.qtd)&&i.qtd>0).map(i=>`${i.qtd} ${String(i.tipo).toLowerCase()}`);
   return [base,it.join(', ')].filter(Boolean).join(' · ');
 }
 const pubResumo=r=>r&&r.pubPlano?pubTexto(pubPlano(r)):String(r&&r.publicacoes||'');
 function pubTiposTodos(){
   const s=new Map(PUB_TIPOS.map(t=>[t.toLowerCase(),t]));
-  rows.forEach(r=>{if(r.pubPlano)pubPlano(r).itens.forEach(i=>{const k=String(i.tipo).trim();if(k&&!s.has(k.toLowerCase()))s.set(k.toLowerCase(),k)})});
+  rows.forEach(r=>{if(r.pubPlano)pubPlano(r).itens.forEach(i=>{const k=String(i.tipo).trim();if(k&&!ehNormal(k)&&!s.has(k.toLowerCase()))s.set(k.toLowerCase(),k)})});
   return [...s.values()];
 }
 function openPub(id){
   const r=rows.find(x=>x.id===id); if(!r) return;
   const p=pubPlano(r);
-  let itens=p.itens.map(i=>({tipo:i.tipo,qtd:isNum(i.qtd)?i.qtd:null}));
   let il=p.ilimitado, total=p.total;
+  const qtd=new Map(); p.itens.forEach(i=>{if(!ehNormal(i.tipo))qtd.set(String(i.tipo),isNum(i.qtd)?i.qtd:null)});
+  let tipos=pubTiposTodos(); qtd.forEach((v,k)=>{if(!tipos.some(t=>t.toLowerCase()===k.toLowerCase()))tipos.push(k)});
+  const val=t=>{for(const [k,v] of qtd)if(k.toLowerCase()===t.toLowerCase())return v;return null};
   const draw=()=>{
     shell(`Publicações · ${r.cliente||''}`,`
       <label class="pubil"><input type="checkbox" id="pubIl"${il?' checked':''}><span>Ilimitado<small>Qualquer pedido, a qualquer momento, inclusive projetos.</small></span></label>
-      <div class="field" id="pubTotWrap"${il?' hidden':''}><label for="pubTot">Total de publicações por mês</label><input id="pubTot" type="number" min="0" inputmode="numeric" value="${isNum(total)?total:''}" placeholder="Ex.: 12"></div>
-      <div class="sec">Divisão por tipo</div>
-      <p class="sub" style="margin:0;font-size:12px">Escolha um tipo da lista ou escreva um novo. ${il?'No ilimitado a quantidade é opcional.':''}</p>
-      <datalist id="dl-pubtipos">${pubTiposTodos().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
-      <div class="itlist" id="pubList">${itens.map((i,n)=>`<div class="pubrow" data-n="${n}"><input class="t" list="dl-pubtipos" value="${esc(i.tipo||'')}" placeholder="Tipo (ex.: Carrossel)" aria-label="Tipo ${n+1}"><input class="q" type="number" min="0" inputmode="numeric" value="${isNum(i.qtd)?i.qtd:''}" placeholder="Qtd." aria-label="Quantidade ${n+1}"><button class="iconbtn" type="button" data-rm="${n}" aria-label="Remover tipo ${n+1}">×</button></div>`).join('')}</div>
-      <div><button class="btn" type="button" id="pubAdd">+ Adicionar tipo</button></div>
-      <div id="pubSum"></div>`,
+      <div id="pubCorpo"${il?' hidden':''}>
+        <div class="field"><label for="pubTot">Quantas publicações por mês</label><input id="pubTot" type="number" min="0" inputmode="numeric" value="${isNum(total)?total:''}" placeholder="Ex.: 16"></div>
+        <div class="sec" style="margin-top:16px">Como se dividem <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)">(opcional)</span></div>
+        <div class="itlist" id="pubList">${tipos.map((t,n)=>`<div class="pubrow"><label for="pq-${n}" class="pubnome">${esc(t)}</label><input class="q" id="pq-${n}" data-tipo="${esc(t)}" type="number" min="0" inputmode="numeric" value="${isNum(val(t))&&val(t)>0?val(t):''}" placeholder="0"><span></span></div>`).join('')}
+          <div class="pubrow pubresto"><span class="pubnome">${PUB_NORMAL} <small>o que sobra</small></span><span class="q" id="pubResto">0</span><span></span></div>
+        </div>
+        <div class="pubrow" style="margin-top:8px"><input id="pubNovo" placeholder="Novo tipo (ex.: Reels de bastidor)" aria-label="Nome do novo tipo"><span></span><button class="iconbtn" type="button" id="pubAdd" aria-label="Adicionar tipo">+</button></div>
+        <div id="pubSum"></div>
+      </div>`,
       `<span></span><div style="display:flex;gap:8px"><button class="btn" id="pubCancel" type="button">Cancelar</button><button class="btn primary" id="pubSave" type="button">Salvar</button></div>`);
     const sync=()=>{
       il=$('#pubIl').checked; const tv=$('#pubTot').value.trim(); total=tv===''?null:Math.max(0,Math.round(+tv));
-      document.querySelectorAll('.pubrow').forEach(row=>{const n=+row.dataset.n,q=row.querySelector('.q').value.trim();itens[n]={tipo:row.querySelector('.t').value.trim(),qtd:q===''?null:Math.max(0,Math.round(+q))}});
-      const soma=itens.reduce((a,i)=>a+(isNum(i.qtd)?i.qtd:0),0), el=$('#pubSum'); el.className='';
-      if(il) el.textContent=itens.filter(i=>i.tipo).length?`Ilimitado, com ${itens.filter(i=>i.tipo).length} tipo(s) listado(s).`:'Ilimitado.';
-      else if(isNum(total)){el.textContent=soma===total?`Distribuídas: ${soma} de ${total}.`:soma<total?`Distribuídas: ${soma} de ${total}. Faltam ${total-soma}.`:`Distribuídas: ${soma} de ${total}. Passou ${soma-total} do total.`;if(soma>total)el.className='warn'}
-      else el.textContent=soma?`Total pela soma dos tipos: ${soma}.`:'';
+      document.querySelectorAll('#pubList input.q').forEach(i=>{const v=i.value.trim();qtd.set(i.dataset.tipo,v===''?null:Math.max(0,Math.round(+v)))});
+      const soma=[...qtd.values()].reduce((a,v)=>a+(isNum(v)?v:0),0), el=$('#pubSum'), resto=isNum(total)?total-soma:null;
+      $('#pubResto').textContent=resto==null?'–':Math.max(0,resto);
+      el.className=''; el.textContent='';
+      if(isNum(total)&&soma>total){el.textContent=`Os tipos somam ${soma}, ${soma-total} a mais que o total de ${total}.`;el.className='warn'}
+      else if(!isNum(total)&&soma) el.textContent=`Sem total definido: o total fica ${soma}.`;
+      return {soma,resto};
     };
     sync();
     $('#pubIl').onchange=()=>{sync();draw()};
     document.querySelector('.drawer').addEventListener('input',sync);
-    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();itens.splice(+b.dataset.rm,1);draw()});
-    $('#pubAdd').onclick=()=>{sync();itens.push({tipo:'',qtd:null});draw();const t=document.querySelectorAll('.pubrow .t');t[t.length-1]?.focus()};
+    const add=()=>{const n=$('#pubNovo').value.trim();if(!n)return;sync();if(ehNormal(n)){toast('Post normal já é o que sobra do total.');return}
+      if(!tipos.some(t=>t.toLowerCase()===n.toLowerCase())){tipos.push(n);qtd.set(n,null)}draw();const q=[...document.querySelectorAll('#pubList input.q')].find(i=>i.dataset.tipo.toLowerCase()===n.toLowerCase());q?.focus()};
+    $('#pubAdd').onclick=add; $('#pubNovo').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();add()}};
     $('#pubCancel').onclick=closeDrawer;
     $('#pubSave').onclick=async()=>{
-      sync();
+      const {soma}=sync();
       if(!canWrite){toast('Você só tem acesso de leitura.');return}
-      const limpos=itens.filter(i=>i.tipo).map(i=>({tipo:i.tipo,qtd:il?(isNum(i.qtd)&&i.qtd>0?i.qtd:null):(isNum(i.qtd)?i.qtd:0)}));
-      const soma=limpos.reduce((a,i)=>a+(i.qtd||0),0);
-      const plano={ilimitado:il,total:il?null:(isNum(total)?total:(soma||null)),itens:limpos};
-      const vazio=!plano.ilimitado&&!isNum(plano.total)&&!limpos.length;
+      if(!il&&isNum(total)&&soma>total){toast('Os tipos passaram do total. Ajuste antes de salvar.');return}
+      let plano;
+      if(il) plano={ilimitado:true,total:null,itens:[]};
+      else{
+        const itens=[...qtd.entries()].filter(([,v])=>isNum(v)&&v>0).map(([tipo,v])=>({tipo,qtd:v}));
+        const tot=isNum(total)?total:(soma||null);
+        if(itens.length&&isNum(tot)&&tot-soma>0) itens.push({tipo:PUB_NORMAL,qtd:tot-soma});
+        plano={ilimitado:false,total:tot,itens};
+      }
+      const vazio=!plano.ilimitado&&!isNum(plano.total);
       const novo={pubPlano:vazio?null:JSON.stringify(plano),publicacoes:vazio?null:pubTexto(plano)};
       $('#pubSave').disabled=true;
       try{Object.assign(r,novo);render();await writeDoc(id,novo,'update');toast('Publicações salvas');closeDrawer()}
