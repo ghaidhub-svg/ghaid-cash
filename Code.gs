@@ -162,7 +162,7 @@ function salvarConfig_(cfg) {
  * vê o Tipo e lança adicionais sem valor. Valores, Observações e Status nunca
  * saem do servidor para a assistente. Senhas ficam como hash nas propriedades do script.
  */
-var VE_ASSIST = ['cliente', 'doc', 'publicacoes', 'pubPlano', 'contato', 'diaEnvio', 'tipo', 'arquivado'];
+var VE_ASSIST = ['cliente', 'publicacoes', 'pubPlano', 'tipo', 'arquivado'];
 // Em cliente existente a assistente só altera publicações. Em cliente novo, também o nome.
 var EDITA_ASSIST = ['publicacoes', 'pubPlano'];
 var NOVO_ASSIST = ['cliente', 'publicacoes', 'pubPlano'];

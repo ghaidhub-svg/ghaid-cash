@@ -489,7 +489,7 @@ function setSync(state,txt){$('#syncDot').className='dot '+(state||'');$('#syncT
 function notice(m){const n=$('#notice');if(!m){n.hidden=true;return}n.textContent=m;n.hidden=false}
 
 /* ---------- render ---------- */
-const COLS_ASSIST=['tipo','cliente','doc','publicacoes','adicionais','diaEnvio','contato'];
+const COLS_ASSIST=['tipo','cliente','publicacoes','adicionais'];
 /* o que a assistente pode alterar na tabela (o servidor confere de novo) */
 const EDITA_ASSIST=['publicacoes','adicionais'];
 const podeVer=c=>!ASSIST()||COLS_ASSIST.includes(c.key);
