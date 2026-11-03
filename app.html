@@ -103,6 +103,10 @@ th .req{color:var(--warn);font-size:13px;line-height:1}
 th.dragging{opacity:.4} th.dropL{box-shadow:inset 3px 0 0 var(--accent)} th.dropR{box-shadow:inset -3px 0 0 var(--accent)}
 th .arrow{font-size:10px;color:var(--accent)}
 .sticky{position:sticky;left:0;z-index:1;background:var(--surface)}
+:root{--tipo-w:136px}
+[data-k="tipo"]{width:var(--tipo-w);min-width:var(--tipo-w);max-width:var(--tipo-w);box-sizing:border-box}
+.sticky[data-k="cliente"]{left:var(--tipo-w)}
+@media (max-width:700px){[data-k="tipo"].sticky{left:auto}.sticky[data-k="cliente"]{left:0}}
 th.sticky{z-index:3;background:var(--surface-2)}
 td .c{padding:11px 14px;min-height:42px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text}
 td.long .c{white-space:normal;min-width:260px;max-width:360px;font-size:13px;color:var(--muted)}
@@ -136,7 +140,7 @@ td.namecell .c span.nm{overflow:hidden;text-overflow:ellipsis}
 .star{flex:none;color:var(--accent);font-size:15px;line-height:1;margin-right:-2px}
 td.na .c{cursor:default;background:var(--surface-2)}
 td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
-.tiposel{flex:1;min-height:42px;min-width:130px;border:0;background:transparent;color:inherit;font:inherit;padding:0 10px 0 14px;cursor:pointer}
+.tiposel{flex:1;min-height:42px;min-width:0;width:100%;border:0;background:transparent;color:inherit;font:inherit;padding:0 10px 0 14px;cursor:pointer}
 .tiposel option{color:var(--fg);background:var(--surface)}
 td.tipo .c.livre{color:var(--accent);font-weight:600}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
@@ -371,6 +375,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 
 <script>
 const DEFAULT_COLS=[
+ {key:'tipo',label:'Tipo',type:'tipo',locked:true},
  {key:'cliente',label:'Cliente',type:'text',required:true,locked:true},
  {key:'razao',label:'Razão social',type:'text',required:true},
  {key:'doc',label:'CNPJ / CPF',type:'mono',required:true},
@@ -384,7 +389,6 @@ const DEFAULT_COLS=[
  {key:'valorNF',label:'Valor NF',type:'money',off:true},
  {key:'obs',label:'Observações',type:'long',off:true},
  {key:'status',label:'Status cobrança',type:'ok',required:true},
- {key:'tipo',label:'Tipo',type:'tipo'},
 ];
 /* mês de referência */
 const nowD=new Date();
@@ -525,7 +529,7 @@ function render(){
     return;
   }
   $('#emptyState').hidden=true;$('#tbl').hidden=false;
-  $('#thead').innerHTML=vc.map(c=>`<th data-k="${c.key}" draggable="${c.locked?'false':'true'}" class="${c.key==='cliente'?'sticky':''}" scope="col"><div class="h" title="Clique para ordenar${c.locked?'':' · arraste para mover'}">${esc(c.label)}${c.required?'<span class="req" title="Obrigatório">•</span>':''}${sortKey===c.key?`<span class="arrow">${sortDir===1?'▲':'▼'}</span>`:''}</div></th>`).join('');
+  $('#thead').innerHTML=vc.map(c=>`<th data-k="${c.key}" draggable="${c.locked?'false':'true'}" class="${c.key==='cliente'||c.key==='tipo'?'sticky':''}" scope="col"><div class="h" title="Clique para ordenar${c.locked?'':' · arraste para mover'}">${esc(c.label)}${c.required?'<span class="req" title="Obrigatório">•</span>':''}${sortKey===c.key?`<span class="arrow">${sortDir===1?'▲':'▼'}</span>`:''}</div></th>`).join('');
   $('#tbody').innerHTML=list.map(r=>{
     const m=missing(r);
     return `<tr data-id="${esc(r.id)}" class="${m.length&&!r.arquivado?'haspend':''}${r.arquivado?' archived':''}">`+vc.map(c=>{
@@ -534,7 +538,7 @@ function render(){
         return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa">${semCobranca(r)?`<span class="star" title="${esc(tipoLabel(r.tipo))}" aria-label="${esc(tipoLabel(r.tipo))}">★</span>`:''}<span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
       }
       if(naoSeAplica(c,r)) return `<td class="na ${c.type}" data-k="${c.key}"><div class="c"></div></td>`;
-      if(c.type==='tipo') return `<td class="tipo" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
+      if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key]);
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
@@ -545,7 +549,8 @@ function render(){
     }).join('')+'</tr>';
   }).join('');
   $('#tfoot').innerHTML=vc.map(c=>{
-    if(c.key==='cliente') return `<td class="sticky"><div class="c">Total · ${list.length} cliente${list.length>1?'s':''}</div></td>`;
+    if(c.key==='tipo') return '<td class="sticky" data-k="tipo"><div class="c"></div></td>';
+    if(c.key==='cliente') return `<td class="sticky" data-k="cliente"><div class="c">Total · ${list.length} cliente${list.length>1?'s':''}</div></td>`;
     if(c.type!=='money'&&c.type!=='calc') return '<td><div class="c"></div></td>';
     const vals=list.filter(r=>!semCobranca(r)).map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
     return `<td class="money"><div class="c">${vals.length?brl.format(vals.reduce((a,b)=>a+b,0)):''}</div></td>`;
@@ -703,8 +708,8 @@ function applyCfg(stored){
     else if(s.custom){out.push({key:s.key,label:s.label,type:s.type||'text',visible:s.visible!==false,required:!!s.required,custom:true})}
   }
   DEFAULT_COLS.forEach((d,i)=>{if(out.find(c=>c.key===d.key))return;let at=out.length;for(let j=i-1;j>=0;j--){const k=out.findIndex(c=>c.key===DEFAULT_COLS[j].key);if(k>=0){at=k+1;break}}out.splice(at,0,{...d,visible:!d.off})});
-  const ci=out.findIndex(c=>c.key==='cliente'); if(ci>0){const [c]=out.splice(ci,1);out.unshift(c)}
-  out[0].visible=true; out[0].required=true;
+  for(const k of ['cliente','tipo']){const i=out.findIndex(c=>c.key===k);if(i>0){const [c]=out.splice(i,1);out.unshift(c)}}
+  out[0].visible=true; out[0].locked=true; out[1].visible=true; out[1].required=true; out[1].locked=true;
   cols=out;
 }
 
@@ -729,7 +734,7 @@ $('#thead').addEventListener('drop',e=>{
   const before=th.classList.contains('dropL'); const target=th.dataset.k;
   if(target!==dragKey){
     const from=cols.findIndex(c=>c.key===dragKey); const [c]=cols.splice(from,1);
-    let to=cols.findIndex(x=>x.key===target)+(before?0:1); if(to<1)to=1;
+    let to=cols.findIndex(x=>x.key===target)+(before?0:1); if(to<2)to=2;
     cols.splice(to,0,c); saveCols();
   }
   dragKey=null; render();
