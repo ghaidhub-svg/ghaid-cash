@@ -18,3 +18,9 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 - Modo diurno e noturno: tudo troca junto (usar tokens no :root).
 - Padrão: um raio de canto (--r: 8px), controles com 40px de altura, cards na mesma grade.
 - Layout centralizado com margens laterais generosas.
+
+## Publicação
+- Morghs autorizou push direto no `main` para alterações no `app.html`, em todos os pedidos (sem precisar perguntar o branch).
+- Antes de publicar: conferir sintaxe do JS, abrir a página num navegador de teste sem erro no console, checar modo diurno, noturno e tela de celular, e as regras da marca.
+- Se algo quebrar: `git revert` do commit e push no `main` para voltar à versão anterior.
+- A autorização vale só para o `app.html`. Outros arquivos: perguntar antes.
