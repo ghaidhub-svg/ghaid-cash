@@ -481,7 +481,7 @@ function notice(m){const n=$('#notice');if(!m){n.hidden=true;return}n.textConten
 /* ---------- render ---------- */
 const COLS_ASSIST=['tipo','cliente','razao','doc','publicacoes','adicionais','diaEnvio','contato'];
 const podeVer=c=>!ASSIST()||COLS_ASSIST.includes(c.key);
-function visibleCols(){return cols.filter(c=>c.visible&&podeVer(c))}
+function visibleCols(){return cols.filter(c=>ASSIST()?podeVer(c):c.visible)}
 function view(){
   const q=query.trim().toLowerCase();
   let list=rows.filter(r=>{
