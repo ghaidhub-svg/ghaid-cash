@@ -322,9 +322,10 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
     <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Buscar cliente, CNPJ, contato…" aria-label="Buscar"></label>
     <div class="chips" role="group" aria-label="Filtro">
-      <button class="chip" data-f="todos" aria-pressed="true">Todos</button>
-      <button class="chip" data-f="pend" aria-pressed="false">Com pendência</button>
+      <button class="chip" data-f="todos" aria-pressed="false">Todos</button>
+      <button class="chip" data-f="ativos" aria-pressed="true">Ativos</button>
       <button class="chip" data-f="arq" aria-pressed="false">Arquivados</button>
+      <button class="chip" data-f="pend" aria-pressed="false">Com pendência</button>
     </div>
     <button class="btn" id="colsBtn" type="button">Colunas</button>
     <button class="btn" id="csvBtn" type="button" hidden>Exportar CSV</button>
@@ -377,7 +378,7 @@ const SUGGEST=['status','vinculo','publicacoes','diaEnvio','multa','mora'];
 let db=null, downloads=null, canWrite=true;
 let rows=[], loaded=false;
 let cols=DEFAULT_COLS.map(c=>({...c,visible:!c.off}));
-let filter='todos', query='', sortKey='cliente', sortDir=1;
+let filter='ativos', query='', sortKey='cliente', sortDir=1;
 let editing=null, pendingRender=false;
 
 const $=s=>document.querySelector(s);
@@ -410,7 +411,8 @@ function visibleCols(){return cols.filter(c=>c.visible)}
 function view(){
   const q=query.trim().toLowerCase();
   let list=rows.filter(r=>{
-    if(filter==='arq'?!r.arquivado:!!r.arquivado) return false;
+    if(filter==='arq'&&!r.arquivado) return false;
+    if((filter==='ativos'||filter==='pend')&&r.arquivado) return false;
     if(filter==='pend'&&!missing(r).length) return false;
     if(q){const hay=cols.map(c=>fmt(c,r)).join(' ').toLowerCase();if(!hay.includes(q))return false}
     return true;
@@ -437,6 +439,8 @@ function render(){
   $('#sClientes').textContent=act.length;
   $('#sTotal').textContent=brl.format(act.reduce((s,r)=>s+(isNum(tm(r))?tm(r):0),0));
   $('#sPend').textContent=act.filter(r=>missing(r).length).length;
+  document.querySelector('.chip[data-f="todos"]').textContent=`Todos (${rows.length})`;
+  document.querySelector('.chip[data-f="ativos"]').textContent=`Ativos (${act.length})`;
   document.querySelector('.chip[data-f="arq"]').textContent=nArq?`Arquivados (${nArq})`:'Arquivados';
   renderDash(act,nArq);
   renderColbar();
@@ -632,7 +636,7 @@ $('#thead').addEventListener('dragend',()=>{dragKey=null;document.querySelectorA
 $('#q').addEventListener('input',e=>{query=e.target.value;render()});
 function setFilter(f){filter=f;document.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.f===f)));render()}
 document.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>setFilter(b.dataset.f)));
-$('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'todos':'pend');
+$('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'ativos':'pend');
 
 
 /* ---------- adicionais (itens) ---------- */
