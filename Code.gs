@@ -12,10 +12,25 @@ var CAB_ADIC = ['id', 'clienteId', 'cliente', 'mes', 'descricao', 'valor'];
 // A tela vem do GitHub (atualiza sozinha a cada publicação). Se o GitHub falhar, usa a cópia do Drive.
 var GITHUB_APP_URL = 'https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/main/app.html';
 
+// Endereço do app.html da versão mais recente do GitHub. Cada versão tem um endereço próprio,
+// então nunca vem uma cópia antiga guardada. Se a consulta falhar, usa o endereço do main.
+function urlApp_() {
+  var cache = CacheService.getScriptCache(), sha = cache.get('APP_SHA');
+  if (!sha) {
+    try {
+      var r = UrlFetchApp.fetch('https://api.github.com/repos/ghaidhub-svg/ghaid-cash/commits/main',
+        { muteHttpExceptions: true, headers: { Accept: 'application/vnd.github.sha' } });
+      var t = r.getResponseCode() === 200 ? r.getContentText().trim() : '';
+      if (/^[0-9a-f]{40}$/.test(t)) { sha = t; cache.put('APP_SHA', sha, 60); }
+    } catch (e) {}
+  }
+  return sha ? 'https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/' + sha + '/app.html' : GITHUB_APP_URL;
+}
+
 function doGet() {
   var html = null;
   try {
-    var r = UrlFetchApp.fetch(GITHUB_APP_URL, { muteHttpExceptions: true });
+    var r = UrlFetchApp.fetch(urlApp_(), { muteHttpExceptions: true });
     if (r.getResponseCode() === 200) html = r.getContentText('UTF-8');
   } catch (e) {}
   if (!html) html = arquivo_(APP_HTML).getBlob().getDataAsString('UTF-8');
