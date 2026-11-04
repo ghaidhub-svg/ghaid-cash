@@ -415,7 +415,6 @@ const DEFAULT_COLS=[
  {key:'totalMes',label:'Total do mês',type:'calc',strong:true},
  {key:'diaEnvio',label:'Dia de envio',type:'text',required:true},
  {key:'contato',label:'Contato p/ boleto',type:'text',required:true},
- {key:'vencimento',label:'Vencimento',type:'mono',off:true},
  {key:'valorNF',label:'Valor NF',type:'money',off:true},
  {key:'obs',label:'Observações',type:'long',off:true},
  {key:'status',label:'Status cobrança',type:'ok',required:true},
@@ -1202,7 +1201,7 @@ function openClient(id){
 function openCols(){
   const draw=()=>{
     const body=cols.map((c,i)=>`<div class="colrow" data-i="${i}">
-      <div class="mv"><button class="mini" data-a="up" ${i<=1?'disabled':''} aria-label="Subir ${esc(c.label)}">↑</button><button class="mini" data-a="down" ${i===0||i===cols.length-1?'disabled':''} aria-label="Descer ${esc(c.label)}">↓</button></div>
+      <div class="mv"><button class="mini" data-a="up" ${i<=2?'disabled':''} aria-label="Subir ${esc(c.label)}">↑</button><button class="mini" data-a="down" ${i<=1||i===cols.length-1?'disabled':''} aria-label="Descer ${esc(c.label)}">↓</button></div>
       <div class="nm">${esc(c.label)}${c.type==='calc'?' <span style="color:var(--muted);font-weight:400;font-size:12px">(cálculo)</span>':''}</div>
       <label class="tog"><input type="checkbox" data-a="vis" ${c.visible?'checked':''} ${c.locked?'disabled':''}>Mostrar</label>
       <label class="tog"><input type="checkbox" data-a="req" ${c.required?'checked':''} ${c.locked||c.type==='calc'?'disabled':''}>Obrigatório</label>
@@ -1215,8 +1214,8 @@ function openCols(){
       row.querySelectorAll('[data-a]').forEach(el=>{
         const a=el.dataset.a;
         const h=()=>{
-          if(a==='up'&&i>1){[cols[i-1],cols[i]]=[cols[i],cols[i-1]]}
-          else if(a==='down'&&i<cols.length-1){[cols[i+1],cols[i]]=[cols[i],cols[i+1]]}
+          if(a==='up'&&i>2){[cols[i-1],cols[i]]=[cols[i],cols[i-1]]}
+          else if(a==='down'&&i>1&&i<cols.length-1){[cols[i+1],cols[i]]=[cols[i],cols[i+1]]}
           else if(a==='vis'){cols[i].visible=el.checked}
           else if(a==='req'){cols[i].required=el.checked}
           else if(a==='rm'){cols.splice(i,1)}
