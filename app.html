@@ -103,7 +103,7 @@ th .req{color:var(--warn);font-size:13px;line-height:1}
 th.dragging{opacity:.4} th.dropL{box-shadow:inset 3px 0 0 var(--accent)} th.dropR{box-shadow:inset -3px 0 0 var(--accent)}
 th .arrow{font-size:10px;color:var(--accent)}
 .sticky{position:sticky;left:0;z-index:1;background:var(--surface)}
-:root{--tipo-w:184px}
+:root{--tipo-w:64px}
 [data-k="tipo"]{width:var(--tipo-w);min-width:var(--tipo-w);max-width:var(--tipo-w);box-sizing:border-box}
 .sticky[data-k="cliente"]{left:var(--tipo-w)}
 @media (max-width:700px){[data-k="tipo"].sticky{left:auto}.sticky[data-k="cliente"]{left:0}}
@@ -140,7 +140,17 @@ td.namecell .c{display:flex;align-items:center;gap:8px;font-weight:600;cursor:po
 tr.archived td .c{opacity:.6}
 td.namecell .c span.nm{overflow:hidden;text-overflow:ellipsis}
 .star{flex:none;color:var(--accent);font-size:15px;line-height:1;margin-right:-2px}
-td.tipo .star{align-self:center;margin:0 -6px 0 12px}
+td.tipo .c{justify-content:center}
+.tipobtn{flex:1;min-height:42px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--fg);cursor:pointer;padding:0}
+.tipobtn:hover{background:var(--surface-2)}
+.tipobtn:focus-visible{outline:2px solid var(--fg);outline-offset:-2px}
+.tipobtn.livre,.tipomenu .livre{color:var(--accent)}
+.ti{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ti.fill{fill:currentColor;stroke:none}
+.ti.rs{width:auto;height:auto;font-size:13px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.ismenu.tipomenu button{display:flex;align-items:center;gap:10px;height:40px}
+.ismenu.tipomenu button .ti{width:18px;height:18px}
+.ismenu.tipomenu button.atual{background:var(--surface-2);font-weight:700}
 td.na .c{cursor:default;background:var(--surface-2)}
 td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
 .tiposel{flex:1;min-height:42px;min-width:0;width:100%;border:0;background:transparent;color:inherit;font:inherit;padding:0 10px 0 14px;cursor:pointer}
@@ -494,6 +504,15 @@ async function migrarStatus(){
 }
 /* Tipo do cliente: quem não é pagante (parceria, permuta, filantropia) ganha estrela e não tem cobrança */
 const TIPOS=[['','Pagante'],['parceria','Parceria'],['permuta','Permuta'],['filantropia','Filantropia'],['pagoporoutro','Pago por outro']];
+const SVG=(d,fill)=>`<svg viewBox="0 0 24 24" aria-hidden="true" class="ti${fill?' fill':''}">${d}</svg>`;
+const TIPO_INFO={
+  '':{icone:'<span class="ti rs" aria-hidden="true">R$</span>',desc:'Cliente que paga mensalidade.'},
+  parceria:{icone:SVG('<path d="M12 2.6l2.8 5.9 6.5.8-4.8 4.5 1.2 6.4L12 17l-5.7 3.2 1.2-6.4-4.8-4.5 6.5-.8z"/>',1),desc:'Parceiro da agência. Sem cobrança.'},
+  permuta:{icone:SVG('<path d="M20 12a8 8 0 0 1-14.2 5M4 12a8 8 0 0 1 14.2-5"/><path d="M18.6 3v4.4h-4.4M5.4 21v-4.4h4.4"/>'),desc:'Troca de serviços. Sem cobrança.'},
+  filantropia:{icone:SVG('<path d="M12 20.5s-7.4-4.5-9.4-9C1.2 8.3 3.2 4.6 6.8 4.6c2 0 3.5 1 4.2 2.5.7-1.5 2.2-2.5 4.2-2.5 3.6 0 5.6 3.7 4.2 6.9-2 4.5-9.4 9-9.4 9z"/>',1),desc:'Trabalho social. Sem cobrança.'},
+  pagoporoutro:{icone:SVG('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),desc:'A cobrança vem junto com outro cliente. Veja em Observações.'},
+};
+const tipoChave=v=>{const k=String(v||'').toLowerCase();return TIPO_INFO[k]?k:''};
 const tipoLabel=v=>(TIPOS.find(t=>t[0]===String(v||'').toLowerCase())||TIPOS[0])[1];
 const semCobranca=r=>!!r&&TIPOS.slice(1).some(t=>t[0]===String(r.tipo||'').toLowerCase());
 const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
@@ -579,7 +598,8 @@ function render(){
       }
       if(naoSeAplica(c,r)) return `<td class="na ${c.type}" data-k="${c.key}"><div class="c"></div></td>`;
       if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
-      if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}">${semCobranca(r)?'<span class="star" aria-hidden="true">★</span>':''}<select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
+      if(c.type==='tipo'){const k=tipoChave(r.tipo);return `<td class="tipo sticky" data-k="${c.key}"><div class="c"><button type="button" class="tipobtn${k?' livre':''}" data-tipomenu data-tip="<strong>${esc(tipoLabel(k))}</strong>${esc(TIPO_INFO[k].desc)} Clique para trocar." aria-label="Tipo: ${esc(tipoLabel(k))}. Clique para trocar.">${TIPO_INFO[k].icone}</button></div></td>`}
+      if(c.type==='tipo_antigo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
@@ -626,6 +646,8 @@ async function rowAction(btn,id){
 }
 /* ---------- inline edit ---------- */
 $('#tbody').addEventListener('click',e=>{
+  const tpb=e.target.closest('[data-tipomenu]');
+  if(tpb){e.stopPropagation();abrirMenuTipo(tpb,tpb.closest('tr').dataset.id);return}
   const isb=e.target.closest('[data-isento]');
   if(isb){e.stopPropagation();abrirMenuIsento(isb,isb.closest('tr').dataset.id,isb.dataset.isento);return}
   const ab=e.target.closest('[data-act]');
@@ -654,6 +676,21 @@ $('#tbody').addEventListener('change',e=>{
 });
 function fecharMenuIsento(){document.querySelector('.ismenu')?.remove();document.removeEventListener('mousedown',foraMenuIsento,true);removeEventListener('scroll',fecharMenuIsento,true)}
 function foraMenuIsento(e){if(!e.target.closest('.ismenu'))fecharMenuIsento()}
+function abrirMenuTipo(btn,id){
+  fecharMenuIsento(); $('#tip').hidden=true;
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const atual=tipoChave(r.tipo);
+  const m=document.createElement('div'); m.className='ismenu tipomenu'; m.setAttribute('role','menu');
+  m.innerHTML=TIPOS.map(([k,l])=>`<button type="button" role="menuitemradio" aria-checked="${k===atual}" data-v="${k}" class="${k===atual?'atual':''}${k?' livre':''}">${TIPO_INFO[k].icone}<span>${esc(l)}</span></button>`).join('');
+  document.body.appendChild(m);
+  const b=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
+  m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.left,innerWidth-w-8))+'px';
+  m.querySelectorAll('button').forEach(o=>o.onclick=()=>{fecharMenuIsento();const v=o.dataset.v||null;if((v||'')!==atual)setCampo(id,'tipo',v)});
+  (m.querySelector('.atual')||m.querySelector('button')).focus();
+  m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const bs=[...m.querySelectorAll('button')],i=bs.indexOf(document.activeElement);bs[(i+(e.key==='ArrowDown'?1:bs.length-1))%bs.length].focus()}});
+  setTimeout(()=>{document.addEventListener('mousedown',foraMenuIsento,true);addEventListener('scroll',fecharMenuIsento,true)},0);
+}
 function abrirMenuIsento(btn,id,key){
   fecharMenuIsento();
   const m=document.createElement('div'); m.className='ismenu'; m.setAttribute('role','menu');
