@@ -159,6 +159,7 @@ td.miss .isbtn{color:var(--alert-text)}
 .ismenu{position:fixed;z-index:40;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;min-width:120px}
 .ismenu button{display:block;width:100%;height:36px;border:0;border-radius:calc(var(--r) - 2px);background:transparent;color:var(--fg);font:inherit;font-size:13px;font-weight:500;text-align:left;padding:0 12px;cursor:pointer}
 .ismenu button:hover,.ismenu button:focus-visible{background:var(--surface-2);outline:none}
+td .c.nfnao{color:var(--muted)}
 td .c.isento{color:var(--muted);font-style:italic}
 .pubil{display:flex;align-items:center;gap:10px;min-height:var(--ctl);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font-size:14px;font-weight:600}
 .pubil input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
@@ -417,7 +418,7 @@ const DEFAULT_COLS=[
  {key:'totalMes',label:'Total do mês',type:'calc',strong:true},
  {key:'diaEnvio',label:'Dia de envio',type:'text',required:true},
  {key:'contato',label:'Contato p/ boleto',type:'text',required:true},
- {key:'nf',label:'Nota fiscal',type:'simnao'},
+ {key:'valorNF',label:'Nota fiscal',type:'money'},
  {key:'obs',label:'Observações',type:'long',off:true},
  {key:'status',label:'Status cobrança',type:'ok',required:true},
 ];
@@ -582,6 +583,7 @@ function render(){
       if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
+      if(c.key==='valorNF'){const tem=!isEmpty(r[c.key]);return `<td class="money nfcell" data-k="${c.key}"><div class="c${tem?' okv':' nfnao'}" title="${tem?'Valor da nota fiscal':'Sem nota fiscal. Clique para colocar o valor'}">${tem?esc(fmt(c,r)):'Não'}</div></td>`}
       const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo','simnao'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
       if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div>${seta}</td>`}
@@ -1176,7 +1178,7 @@ function openClient(id){
     const miss=c.required&&isEmpty(v)&&id;
     const list=SUGGEST.includes(c.key)?` list="dl-${c.key}"`:(c.key==='cliente'||c.type==='long'?'':' list="dl-isento"');
     const input=c.type==='long'?`<textarea id="f-${c.key}" name="${c.key}">${esc(val)}</textarea>`
-      :`<input id="f-${c.key}" name="${c.key}" value="${esc(val)}"${list}${c.type==='money'?' inputmode="decimal" placeholder="0,00"':''}${ASSIST()&&(id||c.key!=='cliente')?' disabled':''}>`;
+      :`<input id="f-${c.key}" name="${c.key}" value="${esc(val)}"${c.key==='valorNF'?'':list}${c.type==='money'?` inputmode="decimal" placeholder="${c.key==='valorNF'?'Não (sem nota)':'0,00'}"`:''}${ASSIST()&&(id||c.key!=='cliente')?' disabled':''}>`;
     return `<div class="field${miss?' miss':''}"><label for="f-${c.key}">${esc(c.label)}${c.required?'<span class="req" style="color:var(--warn)">•</span>':''}${miss?'<span class="hint">falta preencher</span>':''}</label>${input}</div>`;
   }).join('');
   const foot=(id?`<button class="btn danger" id="delBtn" type="button">Excluir cliente</button>`:'<span></span>')+`<div style="display:flex;gap:8px"><button class="btn" id="cancelBtn" type="button">Cancelar</button><button class="btn primary" id="saveBtn" type="button">${id?'Salvar alterações':'Adicionar cliente'}</button></div>`;
