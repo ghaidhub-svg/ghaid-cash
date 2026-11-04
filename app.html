@@ -103,7 +103,7 @@ th .req{color:var(--warn);font-size:13px;line-height:1}
 th.dragging{opacity:.4} th.dropL{box-shadow:inset 3px 0 0 var(--accent)} th.dropR{box-shadow:inset -3px 0 0 var(--accent)}
 th .arrow{font-size:10px;color:var(--accent)}
 .sticky{position:sticky;left:0;z-index:1;background:var(--surface)}
-:root{--tipo-w:136px}
+:root{--tipo-w:160px}
 [data-k="tipo"]{width:var(--tipo-w);min-width:var(--tipo-w);max-width:var(--tipo-w);box-sizing:border-box}
 .sticky[data-k="cliente"]{left:var(--tipo-w)}
 @media (max-width:700px){[data-k="tipo"].sticky{left:auto}.sticky[data-k="cliente"]{left:0}}
@@ -138,6 +138,7 @@ td.namecell .c{display:flex;align-items:center;gap:8px;font-weight:600;cursor:po
 tr.archived td .c{opacity:.6}
 td.namecell .c span.nm{overflow:hidden;text-overflow:ellipsis}
 .star{flex:none;color:var(--accent);font-size:15px;line-height:1;margin-right:-2px}
+td.tipo .star{align-self:center;margin:0 -6px 0 12px}
 td.na .c{cursor:default;background:var(--surface-2)}
 td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
 .tiposel{flex:1;min-height:42px;min-width:0;width:100%;border:0;background:transparent;color:inherit;font:inherit;padding:0 10px 0 14px;cursor:pointer}
@@ -560,11 +561,11 @@ function render(){
     return `<tr data-id="${esc(r.id)}" class="${m.length&&!r.arquivado?'haspend':''}${r.arquivado?' archived':''}">`+vc.map(c=>{
       const txt=fmt(c,r);
       if(c.key==='cliente'){
-        return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa">${semCobranca(r)?`<span class="star" title="${esc(tipoLabel(r.tipo))}" aria-label="${esc(tipoLabel(r.tipo))}">★</span>`:''}<span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
+        return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa"><span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
       }
       if(naoSeAplica(c,r)) return `<td class="na ${c.type}" data-k="${c.key}"><div class="c"></div></td>`;
       if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
-      if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
+      if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}">${semCobranca(r)?'<span class="star" aria-hidden="true">★</span>':''}<select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}" data-k="publicacoes"><div class="c" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div></td>`}
