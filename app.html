@@ -103,7 +103,7 @@ th .req{color:var(--warn);font-size:13px;line-height:1}
 th.dragging{opacity:.4} th.dropL{box-shadow:inset 3px 0 0 var(--accent)} th.dropR{box-shadow:inset -3px 0 0 var(--accent)}
 th .arrow{font-size:10px;color:var(--accent)}
 .sticky{position:sticky;left:0;z-index:1;background:var(--surface)}
-:root{--tipo-w:160px}
+:root{--tipo-w:184px}
 [data-k="tipo"]{width:var(--tipo-w);min-width:var(--tipo-w);max-width:var(--tipo-w);box-sizing:border-box}
 .sticky[data-k="cliente"]{left:var(--tipo-w)}
 @media (max-width:700px){[data-k="tipo"].sticky{left:auto}.sticky[data-k="cliente"]{left:0}}
@@ -148,6 +148,16 @@ td.tipo .c.livre{color:var(--accent);font-weight:600}
 .assist #delBtn{display:none!important}
 .assist .sticky[data-k="cliente"]{left:0}
 td.pubcell .c{cursor:pointer}
+td.hasis{position:relative}
+td.hasis .c{padding-right:30px}
+.isbtn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:0;border-radius:calc(var(--r) - 2px);background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;cursor:pointer;opacity:.55}
+tr:hover .isbtn,.isbtn:focus-visible{opacity:1}
+.isbtn:hover{background:var(--surface-2);color:var(--fg)}
+td.miss .isbtn{color:var(--alert-text)}
+.ismenu{position:fixed;z-index:40;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;min-width:120px}
+.ismenu button{display:block;width:100%;height:36px;border:0;border-radius:calc(var(--r) - 2px);background:transparent;color:var(--fg);font:inherit;font-size:13px;font-weight:500;text-align:left;padding:0 12px;cursor:pointer}
+.ismenu button:hover,.ismenu button:focus-visible{background:var(--surface-2);outline:none}
+td .c.isento{color:var(--muted);font-style:italic}
 .pubil{display:flex;align-items:center;gap:10px;min-height:var(--ctl);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font-size:14px;font-weight:600}
 .pubil input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
 .pubil small{display:block;font-weight:400;color:var(--muted);font-size:12px}
@@ -371,7 +381,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
       <button class="chip" data-f="ativos" aria-pressed="true">Ativos</button>
       <button class="chip" data-f="arq" aria-pressed="false">Arquivados</button>
       <button class="chip" data-f="pend" aria-pressed="false">Com pendência</button>
-      <button class="chip" data-f="livre" aria-pressed="false" title="Parceria, permuta e filantropia">Não pagantes</button>
+      <button class="chip" data-f="livre" aria-pressed="false" title="Parceria, permuta, filantropia e pago por outro cliente">Não pagantes</button>
     </div>
     <button class="btn" id="resetOkBtn" type="button" title="Marca todos os clientes ativos como não enviado">Desmarcar OKs</button>
     <button class="btn" id="colsBtn" type="button">Colunas</button>
@@ -481,7 +491,7 @@ async function migrarStatus(){
   }catch(e){statusMigrado=false;handleWriteErr(e)}
 }
 /* Tipo do cliente: quem não é pagante (parceria, permuta, filantropia) ganha estrela e não tem cobrança */
-const TIPOS=[['','Pagante'],['parceria','Parceria'],['permuta','Permuta'],['filantropia','Filantropia']];
+const TIPOS=[['','Pagante'],['parceria','Parceria'],['permuta','Permuta'],['filantropia','Filantropia'],['pagoporoutro','Pago por outro']];
 const tipoLabel=v=>(TIPOS.find(t=>t[0]===String(v||'').toLowerCase())||TIPOS[0])[1];
 const semCobranca=r=>!!r&&TIPOS.slice(1).some(t=>t[0]===String(r.tipo||'').toLowerCase());
 const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
@@ -568,13 +578,16 @@ function render(){
       if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}">${semCobranca(r)?'<span class="star" aria-hidden="true">★</span>':''}<select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
-      if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}" data-k="publicacoes"><div class="c" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div></td>`}
+      const podeIsentar=isEmpty(r[c.key])&&!['calc','ok','tipo'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
+      const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
+      if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div>${seta}</td>`}
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
       let extra='';
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
       if(c.items&&ASSIST()){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc).join(' · ')||'Clique para lançar adicionais')}">${it.length?`${it.length} ${it.length>1?'itens':'item'}`:'+ adicionar'}</div></td>`}
       if(c.items){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc+': '+brl.format(i.valor||0)).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}</span>`:'+ adicionar'}</div></td>`}
-      return `<td class="${cls}" data-k="${c.key}"><div class="c${extra}" title="${esc(txt)}">${miss?'preencher':esc(txt)}</div></td>`;
+      if(ehIsento(r[c.key])) extra+=' isento';
+      return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(txt)}">${miss?'preencher':esc(txt)}</div>${seta}</td>`;
     }).join('')+'</tr>';
   }).join('');
   $('#tfoot').innerHTML=vc.map(c=>{
@@ -607,6 +620,8 @@ async function rowAction(btn,id){
 }
 /* ---------- inline edit ---------- */
 $('#tbody').addEventListener('click',e=>{
+  const isb=e.target.closest('[data-isento]');
+  if(isb){e.stopPropagation();abrirMenuIsento(isb,isb.closest('tr').dataset.id,isb.dataset.isento);return}
   const ab=e.target.closest('[data-act]');
   if(ab){e.stopPropagation();rowAction(ab,ab.closest('tr').dataset.id);return}
   const td=e.target.closest('td'); if(!td||td.querySelector('.ed')) return;
@@ -626,6 +641,22 @@ $('#tbody').addEventListener('change',e=>{
   const td=sel.closest('td'), col=cols.find(c=>c.key===td.dataset.k);
   if(col) setOk(td.parentElement.dataset.id,col,sel.value||null);
 });
+function fecharMenuIsento(){document.querySelector('.ismenu')?.remove();document.removeEventListener('mousedown',foraMenuIsento,true)}
+function foraMenuIsento(e){if(!e.target.closest('.ismenu'))fecharMenuIsento()}
+function abrirMenuIsento(btn,id,key){
+  fecharMenuIsento();
+  const m=document.createElement('div'); m.className='ismenu'; m.setAttribute('role','menu');
+  m.innerHTML=`<button type="button" role="menuitem">Isento</button>`;
+  document.body.appendChild(m);
+  const b=btn.getBoundingClientRect(), w=m.offsetWidth;
+  m.style.top=(b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+'px';
+  m.querySelector('button').onclick=()=>{fecharMenuIsento();
+    if(key==='publicacoes'){const r=rows.find(x=>x.id===id);if(!r)return;const novo={publicacoes:ISENTO,pubPlano:null};Object.assign(r,novo);render();writeDoc(id,novo,'update').then(()=>toast('Marcado como isento')).catch(handleWriteErr);return}
+    setCampo(id,key,ISENTO).then(()=>toast('Marcado como isento'))};
+  m.querySelector('button').focus();
+  m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}});
+  setTimeout(()=>document.addEventListener('mousedown',foraMenuIsento,true),0);
+}
 async function setCampo(id,key,to){
   if(!canWrite){toast('Você só tem acesso de leitura.');render();return}
   const r=rows.find(x=>x.id===id); if(!r) return;
@@ -687,9 +718,12 @@ function ensureDatalist(key){
   let dl=document.getElementById('dl-'+key);
   if(!dl){dl=document.createElement('datalist');dl.id='dl-'+key;document.body.appendChild(dl)}
   const vals=[...new Set(rows.map(r=>r[key]).filter(v=>!isEmpty(v)).map(String))].sort(coll.compare);
-  dl.innerHTML=vals.map(v=>`<option value="${esc(v)}">`).join('');
+  dl.innerHTML=[ISENTO,...vals.filter(v=>!ehIsento(v))].map(v=>`<option value="${esc(v)}">`).join('');
 }
+const ISENTO='Isento';
+const ehIsento=v=>/^\s*isent[oa]\s*$/i.test(String(v??''));
 function toValue(col,raw){
+  if(ehIsento(raw)) return ISENTO;
   if(col.type==='money'){const n=parseMoney(raw);if(n===null)return null;if(isNaN(n))return {err:true};return n}
   const s=String(raw).trim(); return s===''?null:s;
 }
@@ -1118,16 +1152,17 @@ function openClient(id){
   const r=id?rows.find(x=>x.id===id):{};
   if(id&&!r) return;
   SUGGEST.forEach(ensureDatalist);
+  if(!document.getElementById('dl-isento')){const d=document.createElement('datalist');d.id='dl-isento';d.innerHTML=`<option value="${ISENTO}">`;document.body.appendChild(d)}
   const body=cols.filter(podeVer).map(c=>{
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
     if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
-    if(c.type==='tipo') return `<div class="field"><label for="f-${c.key}">${esc(c.label)} <span class="hint" style="color:var(--muted)">parceria, permuta e filantropia não têm cobrança</span></label><select id="f-${c.key}" name="${c.key}">${tipoOpts(r[c.key])}</select></div>`;
+    if(c.type==='tipo') return `<div class="field"><label for="f-${c.key}">${esc(c.label)} <span class="hint" style="color:var(--muted)">parceria, permuta, filantropia e pago por outro não têm cobrança</span></label><select id="f-${c.key}" name="${c.key}">${tipoOpts(r[c.key])}</select></div>`;
     if(c.type==='ok'){const ok=isOk(r[c.key]);return `<div class="field${ok?' okv':(id?' miss':'')}"><label for="f-${c.key}">${esc(c.label)}</label><select id="f-${c.key}" name="${c.key}">${okOpts(ok)}</select></div>`}
     const v=r[c.key]; const val=isEmpty(v)?'':(c.type==='money'&&isNum(v)?String(v).replace('.',','):String(v));
     const miss=c.required&&isEmpty(v)&&id;
-    const list=SUGGEST.includes(c.key)?` list="dl-${c.key}"`:'';
+    const list=SUGGEST.includes(c.key)?` list="dl-${c.key}"`:(c.key==='cliente'||c.type==='long'?'':' list="dl-isento"');
     const input=c.type==='long'?`<textarea id="f-${c.key}" name="${c.key}">${esc(val)}</textarea>`
       :`<input id="f-${c.key}" name="${c.key}" value="${esc(val)}"${list}${c.type==='money'?' inputmode="decimal" placeholder="0,00"':''}${ASSIST()&&(id||c.key!=='cliente')?' disabled':''}>`;
     return `<div class="field${miss?' miss':''}"><label for="f-${c.key}">${esc(c.label)}${c.required?'<span class="req" style="color:var(--warn)">•</span>':''}${miss?'<span class="hint">falta preencher</span>':''}</label>${input}</div>`;
