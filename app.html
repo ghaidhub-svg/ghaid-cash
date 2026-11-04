@@ -578,7 +578,7 @@ function render(){
       if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}">${semCobranca(r)?'<span class="star" aria-hidden="true">★</span>':''}<select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
-      const podeIsentar=isEmpty(r[c.key])&&!['calc','ok','tipo'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
+      const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
       if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div>${seta}</td>`}
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
@@ -641,21 +641,23 @@ $('#tbody').addEventListener('change',e=>{
   const td=sel.closest('td'), col=cols.find(c=>c.key===td.dataset.k);
   if(col) setOk(td.parentElement.dataset.id,col,sel.value||null);
 });
-function fecharMenuIsento(){document.querySelector('.ismenu')?.remove();document.removeEventListener('mousedown',foraMenuIsento,true)}
+function fecharMenuIsento(){document.querySelector('.ismenu')?.remove();document.removeEventListener('mousedown',foraMenuIsento,true);removeEventListener('scroll',fecharMenuIsento,true)}
 function foraMenuIsento(e){if(!e.target.closest('.ismenu'))fecharMenuIsento()}
 function abrirMenuIsento(btn,id,key){
   fecharMenuIsento();
   const m=document.createElement('div'); m.className='ismenu'; m.setAttribute('role','menu');
-  m.innerHTML=`<button type="button" role="menuitem">Isento</button>`;
+  const r0=rows.find(x=>x.id===id), jaIsento=r0&&ehIsento(r0[key]);
+  m.innerHTML=jaIsento?`<button type="button" role="menuitem">Voltar a preencher</button>`:`<button type="button" role="menuitem">Isento</button>`;
   document.body.appendChild(m);
-  const b=btn.getBoundingClientRect(), w=m.offsetWidth;
-  m.style.top=(b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+'px';
+  const b=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
+  m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+'px';
   m.querySelector('button').onclick=()=>{fecharMenuIsento();
-    if(key==='publicacoes'){const r=rows.find(x=>x.id===id);if(!r)return;const novo={publicacoes:ISENTO,pubPlano:null};Object.assign(r,novo);render();writeDoc(id,novo,'update').then(()=>toast('Marcado como isento')).catch(handleWriteErr);return}
-    setCampo(id,key,ISENTO).then(()=>toast('Marcado como isento'))};
+    const to=jaIsento?null:ISENTO, msg=jaIsento?'Campo voltou para preencher':'Marcado como isento';
+    if(key==='publicacoes'){const r=rows.find(x=>x.id===id);if(!r)return;const novo={publicacoes:to,pubPlano:null};Object.assign(r,novo);render();writeDoc(id,novo,'update').then(()=>toast(msg)).catch(handleWriteErr);return}
+    setCampo(id,key,to).then(()=>toast(msg))};
   m.querySelector('button').focus();
   m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}});
-  setTimeout(()=>document.addEventListener('mousedown',foraMenuIsento,true),0);
+  setTimeout(()=>{document.addEventListener('mousedown',foraMenuIsento,true);addEventListener('scroll',fecharMenuIsento,true)},0);
 }
 async function setCampo(id,key,to){
   if(!canWrite){toast('Você só tem acesso de leitura.');render();return}
