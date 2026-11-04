@@ -495,7 +495,9 @@ const TIPOS=[['','Pagante'],['parceria','Parceria'],['permuta','Permuta'],['fila
 const tipoLabel=v=>(TIPOS.find(t=>t[0]===String(v||'').toLowerCase())||TIPOS[0])[1];
 const semCobranca=r=>!!r&&TIPOS.slice(1).some(t=>t[0]===String(r.tipo||'').toLowerCase());
 const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
-const naoSeAplica=(c,r)=>semCobranca(r)&&(c.type==='money'||c.type==='ok'||c.type==='calc'||SEM_COB_COLS.includes(c.key));
+/* não pagante: só nome, tipo, publicações, adicionais e observações ficam ativos; o resto fica vazio (os dados não são apagados) */
+const ATIVOS_SEM_COB=['cliente','tipo','publicacoes','adicionais','obs'];
+const naoSeAplica=(c,r)=>semCobranca(r)&&!ATIVOS_SEM_COB.includes(c.key);
 const tipoOpts=v=>TIPOS.map(([k,l])=>`<option value="${k}"${String(v||'').toLowerCase()===k?' selected':''}>${l}</option>`).join('');
 function colMiss(c,r){if(naoSeAplica(c,r))return false;return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
 function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&c.type!=='tipo'&&podeVer(c)&&(!ASSIST()||EDITA_ASSIST.includes(c.key))&&colMiss(c,r))}
@@ -594,7 +596,7 @@ function render(){
     if(c.key==='tipo') return '<td class="sticky" data-k="tipo"><div class="c"></div></td>';
     if(c.key==='cliente') return `<td class="sticky" data-k="cliente"><div class="c">Total · ${list.length} cliente${list.length>1?'s':''}</div></td>`;
     if((c.type!=='money'&&c.type!=='calc')||ASSIST()) return '<td><div class="c"></div></td>';
-    const vals=list.filter(r=>!semCobranca(r)).map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
+    const vals=list.filter(r=>!naoSeAplica(c,r)).map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
     return `<td class="money"><div class="c">${vals.length?brl.format(vals.reduce((a,b)=>a+b,0)):''}</div></td>`;
   }).join('');
 }
@@ -627,6 +629,7 @@ $('#tbody').addEventListener('click',e=>{
   const td=e.target.closest('td'); if(!td||td.querySelector('.ed')) return;
   const id=td.parentElement.dataset.id, k=td.dataset.k;
   if(k==='cliente'){openClient(id);return}
+  if(td.classList.contains('na')) return;
   if(k==='publicacoes'){openPub(id);return}
   if(ASSIST()&&!EDITA_ASSIST.includes(k)) return;
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
@@ -819,7 +822,7 @@ $('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'ativos':'pend');
 
 /* ---------- adicionais (itens) ---------- */
 function emailText(r,items){
-  const plano=isNum(r.valorMensal)?r.valorMensal:0;
+  const plano=!semCobranca(r)&&isNum(r.valorMensal)?r.valorMensal:0;
   const sum=items.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
   const L=[`Resumo da cobrança · ${mesLabel(refMes)}`,'',`Plano mensal: ${brl.format(plano)}`];
   if(items.length){L.push('','Adicionais do mês:');items.forEach(i=>L.push(`• ${i.desc||'Item'}: ${brl.format(isNum(i.valor)?i.valor:0)}`));L.push(`Total de adicionais: ${brl.format(sum)}`)}
@@ -843,7 +846,7 @@ function openItems(id){
     const sync=()=>{
       document.querySelectorAll('.itrow').forEach(row=>{const n=+row.dataset.n;items[n].desc=row.querySelector('.d').value.trim();const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
       const clean=items.filter(i=>i.desc||isNum(i.valor));
-      const plano=isNum(r.valorMensal)?r.valorMensal:0, sum=clean.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
+      const plano=!semCobranca(r)&&isNum(r.valorMensal)?r.valorMensal:0, sum=clean.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
       $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length})</span><span>${brl.format(sum)}</span></div><div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
       $('#itMail').value=emailText(r,clean);
       return clean;
@@ -1019,7 +1022,7 @@ $('#colbar').addEventListener('click',e=>{
   if(a){const all=a.dataset.all==='1';cols.forEach(c=>{if(!c.locked)c.visible=all?true:!DEFAULT_COLS.find(d=>d.key===c.key)?.off});saveCols();render()}
 });
 /* ---------- dashboard ---------- */
-const tm=r=>semCobranca(r)?null:CALC.totalMes(r);
+const tm=r=>semCobranca(r)?CALC.adicionais(r):CALC.totalMes(r); // não pagante: só os adicionais do mês entram
 const brlC=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1});
 const numC=new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1});
 const pct=n=>Math.round(n*100)+'%';
@@ -1155,7 +1158,7 @@ function openClient(id){
   if(id&&!r) return;
   SUGGEST.forEach(ensureDatalist);
   if(!document.getElementById('dl-isento')){const d=document.createElement('datalist');d.id='dl-isento';d.innerHTML=`<option value="${ISENTO}">`;document.body.appendChild(d)}
-  const body=cols.filter(podeVer).map(c=>{
+  const body=cols.filter(podeVer).filter(c=>!(id&&semCobranca(r)&&!ATIVOS_SEM_COB.includes(c.key))).map(c=>{
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
     if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
