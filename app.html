@@ -127,7 +127,7 @@ tfoot td .c{cursor:default;font-weight:700;color:var(--fg)}
 tfoot td.sticky{z-index:3;background:var(--surface-2)}
 td.calc .c.neg{color:var(--bad)} td.calc .c.pos{color:var(--good)}
 td.miss .c{background:var(--warn-soft);color:var(--alert-text);font-size:12px;font-weight:500;box-shadow:inset 0 0 0 1px var(--warn-line)}
-td.miss .c::before{content:"! ";font-weight:700;color:var(--warn)}
+td.miss:not(.ok) .c{font-size:15px;font-weight:700;color:var(--warn)}
 tr:hover td{background-image:linear-gradient(var(--surface-2),var(--surface-2))}
 tr:hover td.miss .c{background:var(--warn-soft)}
 td.namecell .c{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;min-width:300px;max-width:380px}
@@ -409,7 +409,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
     <div class="empty" id="emptyState"><strong>Carregando seus clientes</strong>A tabela aparece aqui assim que os dados chegarem. Para começar do zero, use “+ Novo cliente”.</div>
     <table id="tbl" hidden><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody><tfoot><tr id="tfoot"></tr></tfoot></table>
   </div>
-  <div class="foot">Células em vermelho com “!” são campos obrigatórios vazios.<span class="so-dona"> Arraste o título de uma coluna para mudar a ordem, ou use “Colunas” para ordenar, esconder e definir o que é obrigatório.</span></div>
+  <div class="foot">Células em vermelho com “?” são campos obrigatórios vazios.<span class="so-dona"> Arraste o título de uma coluna para mudar a ordem, ou use “Colunas” para ordenar, esconder e definir o que é obrigatório.</span></div>
 </div>
 
 <div id="drawerRoot"></div>
@@ -606,14 +606,14 @@ function render(){
       if(c.key==='valorNF'){const tem=!isEmpty(r[c.key]);return `<td class="money nfcell" data-k="${c.key}"><div class="c${tem?' okv':' nfnao'}" title="${tem?'Valor da nota fiscal':'Sem nota fiscal. Clique para colocar o valor'}">${tem?esc(fmt(c,r)):'Não'}</div></td>`}
       const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo','simnao'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
-      if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div>${seta}</td>`}
+      if(c.key==='publicacoes'){const t=pubResumo(r),curto=pubCurto(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" data-tip="<strong>Publicações</strong>${esc(t||'Não definido. Clique para preencher.')}">${miss?'?':esc(curto||t)}</div>${seta}</td>`}
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
       let extra='';
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
       if(c.items&&ASSIST()){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc).join(' · ')||'Clique para lançar adicionais')}">${it.length?`${it.length} ${it.length>1?'itens':'item'}`:'+ adicionar'}</div></td>`}
       if(c.items){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc+': '+brl.format(i.valor||0)).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}</span>`:'+ adicionar'}</div></td>`}
       if(ehIsento(r[c.key])) extra+=' isento';
-      return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(txt)}">${miss?'preencher':esc(txt)}</div>${seta}</td>`;
+      return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(miss?'Falta preencher':txt)}">${miss?'?':esc(txt)}</div>${seta}</td>`;
     }).join('')+'</tr>';
   }).join('');
   $('#tfoot').innerHTML=vc.map(c=>{
@@ -956,6 +956,12 @@ function pubTexto(p){
   const base=isNum(p.total)?`${p.total} publicaç${p.total===1?'ão':'ões'}`:'';
   const it=p.itens.filter(i=>isNum(i.qtd)&&i.qtd>0).map(i=>`${i.qtd} ${String(i.tipo).toLowerCase()}`);
   return [base,it.join(', ')].filter(Boolean).join(' · ');
+}
+function pubCurto(r){
+  if(ehIsento(r&&r.publicacoes)) return ISENTO;
+  const p=pubPlano(r);
+  if(p.ilimitado) return 'Ilimitado';
+  return isNum(p.total)?`${p.total} publi.`:'';
 }
 const pubResumo=r=>r&&r.pubPlano?pubTexto(pubPlano(r)):String(r&&r.publicacoes||'');
 function pubTiposTodos(){
