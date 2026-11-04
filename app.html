@@ -116,6 +116,8 @@ td.calc .c{cursor:default;color:var(--muted)}
 td .c.okv{color:var(--good);font-weight:700}
 td.ok .c{padding:0;cursor:default;display:flex;align-items:stretch}
 td.ok .c::before{display:none}
+.snsel{flex:1;min-height:42px;min-width:90px;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;padding:0 10px 0 14px;cursor:pointer}
+.snsel option{color:var(--fg);background:var(--surface);font-weight:500}
 .oksel{flex:1;min-height:42px;min-width:140px;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;padding:0 10px 0 14px;cursor:pointer}
 .oksel option{color:var(--fg);background:var(--surface);font-weight:500}
 .oksel:focus-visible{outline:2px solid var(--fg);outline-offset:-2px}
@@ -415,7 +417,7 @@ const DEFAULT_COLS=[
  {key:'totalMes',label:'Total do mês',type:'calc',strong:true},
  {key:'diaEnvio',label:'Dia de envio',type:'text',required:true},
  {key:'contato',label:'Contato p/ boleto',type:'text',required:true},
- {key:'valorNF',label:'Valor NF',type:'money',off:true},
+ {key:'nf',label:'Nota fiscal',type:'simnao'},
  {key:'obs',label:'Observações',type:'long',off:true},
  {key:'status',label:'Status cobrança',type:'ok',required:true},
 ];
@@ -577,9 +579,10 @@ function render(){
       if(naoSeAplica(c,r)) return `<td class="na ${c.type}" data-k="${c.key}"><div class="c"></div></td>`;
       if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
       if(c.type==='tipo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}">${semCobranca(r)?'<span class="star" aria-hidden="true">★</span>':''}<select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
+      if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
-      const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
+      const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo','simnao'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
       if(c.key==='publicacoes'){const t=pubResumo(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" title="${esc(t||'Clique para definir as publicações')}">${miss?'preencher':esc(t)}</div>${seta}</td>`}
       let cls=c.type+(c.strong?' strong':''); if(miss) cls+=' miss';
@@ -632,13 +635,17 @@ $('#tbody').addEventListener('click',e=>{
   if(k==='publicacoes'){openPub(id);return}
   if(ASSIST()&&!EDITA_ASSIST.includes(k)) return;
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
-  if(col.type==='ok'||col.type==='tipo'||td.classList.contains('na')) return;
+  if(col.type==='ok'||col.type==='simnao'||col.type==='tipo'||td.classList.contains('na')) return;
   startEdit(td,id,col);
 });
+const ehSim=v=>/^\s*sim\s*$/i.test(String(v??''));
+const simNaoOpts=v=>`<option value=""${ehSim(v)?'':' selected'}>Não</option><option value="Sim"${ehSim(v)?' selected':''}>Sim</option>`;
 const okOpts=ok=>`<option value=""${ok?'':' selected'}>Não enviado</option><option value="OK"${ok?' selected':''}>OK</option>`;
 $('#tbody').addEventListener('change',e=>{
   const ts=e.target.closest('.tiposel');
   if(ts){const id=ts.closest('tr').dataset.id;setCampo(id,'tipo',ts.value||null);return}
+  const sn=e.target.closest('.snsel');
+  if(sn){const td=sn.closest('td');setCampo(td.parentElement.dataset.id,td.dataset.k,sn.value||null);return}
   const sel=e.target.closest('.oksel'); if(!sel) return;
   const td=sel.closest('td'), col=cols.find(c=>c.key===td.dataset.k);
   if(col) setOk(td.parentElement.dataset.id,col,sel.value||null);
@@ -1163,6 +1170,7 @@ function openClient(id){
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
     if(c.type==='tipo') return `<div class="field"><label for="f-${c.key}">${esc(c.label)} <span class="hint" style="color:var(--muted)">parceria, permuta, filantropia e pago por outro não têm cobrança</span></label><select id="f-${c.key}" name="${c.key}">${tipoOpts(r[c.key])}</select></div>`;
+    if(c.type==='simnao') return `<div class="field${ehSim(r[c.key])?' okv':''}"><label for="f-${c.key}">${esc(c.label)}</label><select id="f-${c.key}" name="${c.key}">${simNaoOpts(r[c.key])}</select></div>`;
     if(c.type==='ok'){const ok=isOk(r[c.key]);return `<div class="field${ok?' okv':(id?' miss':'')}"><label for="f-${c.key}">${esc(c.label)}</label><select id="f-${c.key}" name="${c.key}">${okOpts(ok)}</select></div>`}
     const v=r[c.key]; const val=isEmpty(v)?'':(c.type==='money'&&isNum(v)?String(v).replace('.',','):String(v));
     const miss=c.required&&isEmpty(v)&&id;
@@ -1182,7 +1190,7 @@ function openClient(id){
     if(!canWrite){toast('Você só tem acesso de leitura.');return}
     const data={};
     for(const c of cols){if(c.type==='calc'||!podeVer(c)||(c.type==='tipo'&&ASSIST())||(ASSIST()&&c.key!=='cliente'))continue;const el=document.getElementById('f-'+c.key);if(!el)continue;
-      if(c.type==='ok'||c.type==='tipo'){data[c.key]=el.value||null;continue}
+      if(c.type==='ok'||c.type==='tipo'||c.type==='simnao'){data[c.key]=el.value||null;continue}
       const v=toValue(c,el.value); if(v&&v.err){toast(`${c.label}: valor inválido. Use algo como 1.380,00.`);el.focus();return} data[c.key]=v}
     if(isEmpty(data.cliente)){toast('Dê um nome ao cliente.');$('#f-cliente').focus();return}
     $('#saveBtn').disabled=true;
