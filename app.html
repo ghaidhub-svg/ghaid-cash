@@ -301,6 +301,8 @@ button.kpi[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 
 .mesctl .mini{border:0}
 td.items .c{cursor:pointer;color:var(--fg);font-weight:600}
 td.items .c.empty{color:var(--muted);font-weight:500;font-size:12px}
+td.items .c.visto{color:var(--good)}
+td.items .c.sempreco,td.items .c.sempreco .cnt{color:var(--alert-text)}
 td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
 .itrow{display:grid;grid-template-columns:minmax(0,1fr) 120px 32px;gap:8px;align-items:center}
 .itrow input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0;width:100%}
@@ -733,7 +735,10 @@ function render(){
       let extra='';
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
       if(c.items&&ASSIST()){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc).join(' · ')||'Clique para lançar adicionais')}">${it.length?`${it.length} ${it.length>1?'itens':'item'}`:'+ adicionar'}</div></td>`}
-      if(c.items){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc+': '+(i.cortesia?'cortesia':brl.format(i.valor||0))).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}</span>`:'+ adicionar'}</div></td>`}
+      if(c.items){const it=itemsOf(r);
+        // verde: todos os itens do mês foram vistos (têm valor ou são cortesia); vermelho: algum sem preço
+        const semP=it.filter(i=>!i.cortesia&&!isNum(i.valor)).length, visto=it.length>0&&!semP;
+        return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}${visto?' visto':''}${semP?' sempreco':''}" title="${esc(it.map(i=>i.desc+': '+(i.cortesia?'cortesia':isNum(i.valor)?brl.format(i.valor):'sem preço')).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}${semP?` · ${semP} sem preço`:''}</span>`:'+ adicionar'}</div></td>`}
       if(ehIsento(r[c.key])) extra+=' isento';
       return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(miss?'Falta preencher':txt)}">${miss?'?':esc(txt)}</div>${seta}</td>`;
     }).join('')+'</tr>';
@@ -1073,7 +1078,7 @@ function openItems(id){
     $('#itSave').onclick=async()=>{
       if(!canWrite){toast('Você só tem acesso de leitura.');return}
       for(const row of document.querySelectorAll('.itrow')){const raw=row.querySelector('.v').value;if(raw.trim()&&isNaN(parseMoney(raw))){toast(`“${raw}” não é um valor válido. Use algo como 150,00.`);row.querySelector('.v').focus();return}}
-      const clean=sync().map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:i.cortesia?0:(isNum(i.valor)?i.valor:0),cortesia:!!i.cortesia}));
+      const clean=sync().map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:i.cortesia?0:(isNum(i.valor)?i.valor:null),cortesia:!!i.cortesia}));
       const others=(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).filter(i=>i&&i.mes!==refMes);
       $('#itSave').disabled=true;
       const antes=copia(r);
