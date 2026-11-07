@@ -1595,7 +1595,7 @@ $('#listBtn').onclick=()=>{
     if(!sel.length) return;
     $('#impGo').disabled=true;
     try{
-      await writeMany(sel.map(i=>[db.collection('clientes').doc().id,{cliente:i.nome.toUpperCase()},'set']),(n,t)=>{$('#impGo').textContent=`Incluindo ${n}/${t}…`});
+      await writeMany(sel.map(i=>[db.collection('clientes').doc().id,{cliente:i.nome.toUpperCase(),...(filter==='esp'?{tipo:'esporadico'}:{})},'set']),(n,t)=>{$('#impGo').textContent=`Incluindo ${n}/${t}…`});
       toast(`${sel.length} cliente${sel.length>1?'s':''} incluído${sel.length>1?'s':''}`);closeDrawer();
     }catch(e){$('#impGo').disabled=false;handleWriteErr(e)}
   };
@@ -1623,11 +1623,12 @@ function shell(title,body,foot){
   $('#scrim').onclick=closeDrawer; $('#dx').onclick=closeDrawer;
 }
 function openClient(id){
-  const r=id?rows.find(x=>x.id===id):{};
+  // com o filtro Esporádicos ligado, o cliente novo já nasce esporádico
+  const r=id?rows.find(x=>x.id===id):(filter==='esp'&&!ASSIST()?{tipo:'esporadico'}:{});
   if(id&&!r) return;
   SUGGEST.forEach(ensureDatalist);
   if(!document.getElementById('dl-isento')){const d=document.createElement('datalist');d.id='dl-isento';d.innerHTML=`<option value="${ISENTO}">`;document.body.appendChild(d)}
-  const body=cols.filter(podeVer).filter(c=>!(id&&naoSeAplica(c,r))).map(c=>{
+  const body=cols.filter(podeVer).filter(c=>!((id||r.tipo)&&naoSeAplica(c,r))).map(c=>{
     if(c.type==='tipo'&&id&&ehGrupo(r)) return `<div class="field"><label>Grupo</label><div class="calcv">${contasDe(r).length} conta(s): ${esc(contasDe(r).map(x=>x.cliente).join(', ')||'nenhuma')}</div></div>`;
     if(c.type==='tipo'&&id&&ehConta(r)) return `<div class="field"><label>Grupo</label><div class="calcv">Conta do grupo ${esc(grupoDe(r).cliente||'')}</div></div>`;
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
@@ -1645,7 +1646,7 @@ function openClient(id){
     return `<div class="field${miss?' miss':''}"><label for="f-${c.key}">${esc(c.label)}${c.required?'<span class="req" style="color:var(--warn)">•</span>':''}${miss?'<span class="hint">falta preencher</span>':''}</label>${input}</div>`;
   }).join('');
   const foot=(id&&!ehGrupo(r)?`<button class="btn danger" id="delBtn" type="button">Excluir cliente</button>`:'<span></span>')+`<div style="display:flex;gap:8px"><button class="btn" id="cancelBtn" type="button">Cancelar</button><button class="btn primary" id="saveBtn" type="button">${id?'Salvar alterações':'Adicionar cliente'}</button></div>`;
-  shell(id?(r.cliente||'Cliente'):'Novo cliente',body,foot);
+  shell(id?(r.cliente||'Cliente'):(r.tipo==='esporadico'?'Novo cliente esporádico':'Novo cliente'),body,foot);
   $('#cancelBtn').onclick=closeDrawer;
   if($('#goItems')) $('#goItems').onclick=()=>openItems(id);
   if($('#goPub')) $('#goPub').onclick=()=>openPub(id);
