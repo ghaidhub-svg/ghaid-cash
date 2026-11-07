@@ -183,7 +183,7 @@ td .c.isento{color:var(--muted);font-style:italic}
 .pubrow input.q{text-align:right}
 #pubSum{font-size:13px;font-weight:600}
 #pubSum.warn{color:var(--bad)}
-.assist .dash,.assist #resetOkBtn,.assist #colsBtn,.assist #csvBtn,.assist .colbar,.assist .chip[data-f="arq"],.assist .chip[data-f="livre"],.assist #listBtn,.assist #newBtn,.assist .act{display:none!important}
+.assist .dash,.assist #boletosBtn,.assist #resetOkBtn,.assist #colsBtn,.assist #csvBtn,.assist .colbar,.assist .chip[data-f="arq"],.assist .chip[data-f="livre"],.assist #listBtn,.assist #newBtn,.assist .act{display:none!important}
 .selbox{width:16px;height:16px;margin:0;flex:none;accent-color:var(--fg);cursor:pointer}
 .gbadge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;color:var(--muted);border:1px solid var(--line)}
 tr.grupo td.namecell .nm{font-weight:700}
@@ -195,6 +195,23 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .imp-row.soma{border-style:dashed}
 .imp-row.soma .tag{color:var(--fg)}
 .toastbtn{margin-left:14px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.bolcfg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.bolcfg .field{min-width:0}
+.bolcfg input{min-width:0;width:100%;box-sizing:border-box}
+.bol{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.bol.falta{border-color:var(--warn-line);background:var(--warn-soft)}
+.bolhead{display:flex;align-items:baseline;gap:10px}
+.bolhead strong{font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bolhead .v{font-weight:700;white-space:nowrap}
+.bolsub{color:var(--muted)}
+.bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
+.bolparte{display:flex;justify-content:space-between;gap:10px}
+.bolfalta{color:var(--alert-text);font-weight:600;font-size:12px}
+.boldiv{display:flex;align-items:center;gap:8px;cursor:pointer;width:fit-content}
+.boldiv input{width:16px;height:16px;margin:0;accent-color:var(--fg)}
+.bolform{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.bolform label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:var(--muted)}
+.bolform input{height:var(--ctl);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--fg);min-width:0}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
 .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 tr.haspend td.namecell{box-shadow:inset 3px 0 0 var(--warn-line)}
@@ -407,6 +424,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
       <button class="chip" data-f="pend" aria-pressed="false">Com pendência</button>
       <button class="chip" data-f="livre" aria-pressed="false" title="Parceria, permuta, filantropia e pago por outro cliente">Não pagantes</button>
     </div>
+    <button class="btn" id="boletosBtn" type="button" title="Lista de boletos do mês para gerar no banco">Boletos</button>
     <button class="btn" id="resetOkBtn" type="button" title="Marca todos os clientes ativos como não enviado">Desmarcar OKs</button>
     <button class="btn" id="colsBtn" type="button">Colunas</button>
     <button class="btn" id="csvBtn" type="button" hidden>Exportar CSV</button>
@@ -558,7 +576,7 @@ let toastT;function toast(m,acao,ms){const t=$('#toast');t.textContent=m;
    Antes de cada mudança guardamos uma cópia das linhas afetadas. Desfazer regrava essas cópias
    (ou apaga a linha que foi criada). Vale para a última mudança, por alguns segundos. */
 const copia=r=>r?JSON.parse(JSON.stringify(r)):null;
-let ultimoDesfazer=null, drawerUndo=null;
+let ultimoDesfazer=null, drawerUndo=null, painelVivo=null; // painelVivo: painel que se redesenha quando os dados chegam
 function oferecerDesfazer(msg,estados){
   ultimoDesfazer={estados,ate:Date.now()+15000};
   toast(msg,{label:'Desfazer',fn:desfazer},8000);
@@ -641,6 +659,7 @@ function render(){
   renderDash(act,nArq);
   renderColbar();
   renderSelBar();
+  if(painelVivo){const a=document.activeElement;if(!(a&&a.closest&&a.closest('#drawerRoot')&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)))painelVivo()}
   // sort note
   const sc=cols.find(c=>c.key===sortKey);
   $('#sortNote').innerHTML=(sortKey==='cliente'&&sortDir===1)
@@ -1157,6 +1176,105 @@ function openPub(id){
   };
   draw();
 }
+/* ---------- boletos do mês: lista conferida para gerar no banco ----------
+   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = Dia de envio no mês de referência.
+   "Dividir em 2 boletos" fica salvo no cliente (campo boleto2) e vale para os próximos meses. */
+const BOLETO_PADRAO={juros:'0,25% ao mês',multa:'1,00% após o vencimento'};
+const cfgBoleto=()=>({...BOLETO_PADRAO,...(cfgFlags.boleto||{})});
+const lerJSON=v=>{if(!v)return null;if(typeof v==='object')return v;try{return JSON.parse(v)}catch(e){return null}};
+const valido=v=>!isEmpty(v)&&!ehIsento(v);
+function dataVenc(dia){
+  const d=parseInt(String(dia??'').trim(),10); if(!(d>=1&&d<=31)) return null;
+  const [y,m]=refMes.split('-').map(Number), ult=new Date(y,m,0).getDate();
+  return `${String(Math.min(d,ult)).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+}
+function pagadorDe(r){
+  if(!ehGrupo(r)) return r;
+  const cs=contasDe(r);
+  return cs.find(c=>c.id===String(r.pagadorId||''))||cs.find(c=>valido(c.razao)&&valido(c.doc))||cs[0]||r;
+}
+function boletosDoMes(){
+  return rows.filter(r=>!r.arquivado&&!ehConta(r)&&!semCobranca(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>{
+    const total=tm(r), pag=pagadorDe(r), div=lerJSON(r.boleto2), faltas=[];
+    if(!valido(pag.razao)) faltas.push('razão social');
+    if(!valido(pag.doc)) faltas.push('CNPJ/CPF');
+    if(!isNum(total)||total<=0) faltas.push('valor');
+    if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
+    let partes;
+    if(div&&isNum(total)&&total>0){
+      const v1=isNum(div.valor1)&&div.valor1>0&&div.valor1<total?div.valor1:Math.round(total*50)/100;
+      partes=[{valor:v1,venc:dataVenc(div.dia1||r.diaEnvio)},{valor:Math.round((total-v1)*100)/100,venc:dataVenc(div.dia2)}];
+    }else partes=[{valor:total,venc:dataVenc(r.diaEnvio)}];
+    if(partes.some(x=>!x.venc)) faltas.push('vencimento (dia de envio)');
+    return {r,pag,total,div,partes,faltas};
+  });
+}
+function textoBoletos(lista){
+  const cfg=cfgBoleto(), prontos=lista.filter(b=>!b.faltas.length);
+  const L=[`Gerar boletos no Sicredi · ${mesLabel(refMes)}`,`Juros: ${cfg.juros} · Multa: ${cfg.multa}`,'',
+    'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
+    'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',''];
+  let n=0;
+  prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${x.venc}${b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}`:''} (cliente: ${b.r.cliente})`)}));
+  const pend=lista.filter(b=>b.faltas.length);
+  if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
+  return L.join('\n');
+}
+function openBoletos(){
+  if(ASSIST()) return;
+  const draw=()=>{
+    const cfg=cfgBoleto(), lista=boletosDoMes(), prontos=lista.filter(b=>!b.faltas.length);
+    const nBol=prontos.reduce((s,b)=>s+b.partes.length,0), soma=prontos.reduce((s,b)=>s+b.total,0);
+    const card=b=>{
+      const r=b.r, g=ehGrupo(r), dv=b.div||{};
+      const pagador=g?`<select data-pagador aria-label="Pagador do grupo ${esc(r.cliente)}">${contasDe(r).map(c=>`<option value="${esc(c.id)}"${c.id===b.pag.id?' selected':''}>Pagador: ${esc(c.cliente)}</option>`).join('')}</select> `:'';
+      return `<div class="bol${b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
+        <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
+        <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
+        ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}`:'Boleto único'} · venc. ${x.venc||'sem data'}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
+        ${b.faltas.length?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
+        <label class="boldiv"><input type="checkbox" data-div${b.div?' checked':''}> Dividir em 2 boletos</label>
+        ${b.div?`<div class="bolform">
+          <label>Valor do 1º<input data-v1 inputmode="decimal" placeholder="metade" value="${isNum(dv.valor1)?moedaTxt(dv.valor1):''}"></label>
+          <label>Dia do 1º<input data-d1 inputmode="numeric" placeholder="${esc(String(r.diaEnvio??''))}" value="${esc(String(dv.dia1??''))}"></label>
+          <label>Dia do 2º<input data-d2 inputmode="numeric" placeholder="Ex.: 25" value="${esc(String(dv.dia2??''))}"></label></div>`:''}
+      </div>`;
+    };
+    shell('Boletos do mês',`
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) pronto(s), somando ${brl.format(soma)}. Não pagantes, contas de grupo e arquivados ficam de fora. O vencimento é o Dia de envio neste mês.</p>
+      <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
+      <div class="sec">Cobranças</div>
+      <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
+      <div class="sec">Texto para o Claude in Chrome</div>
+      <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>`,
+      `<span></span><div style="display:flex;gap:8px"><button class="btn" id="bolFechar" type="button">Fechar</button><button class="btn primary" id="bolCopiar" type="button">Copiar texto</button></div>`);
+    painelVivo=draw;
+    $('#bolFechar').onclick=closeDrawer;
+    $('#bolCopiar').onclick=()=>{const t=$('#bolTexto').value;const fb=()=>{const el=$('#bolTexto');el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
+      try{navigator.clipboard.writeText(t).then(()=>toast('Texto copiado. Cole no Claude in Chrome com o Sicredi aberto.'),fb)}catch(e){fb()}};
+    const salvarCfg=()=>{cfgFlags={...cfgFlags,boleto:{juros:$('#bJuros').value.trim()||BOLETO_PADRAO.juros,multa:$('#bMulta').value.trim()||BOLETO_PADRAO.multa}};saveCols();$('#bolTexto').value=textoBoletos(boletosDoMes());toast('Juros e multa salvos')};
+    $('#bJuros').onchange=salvarCfg; $('#bMulta').onchange=salvarCfg;
+    // grava e garante o valor novo na linha atual (uma leitura antiga da planilha pode ter chegado no meio)
+    const salvarDiv=async(id,valor)=>{await setCampo(id,'boleto2',valor,valor?'Divisão em 2 boletos salva':'Volta a ser boleto único');const a=rows.find(x=>x.id===id);if(a)a.boleto2=valor;draw()};
+    document.querySelectorAll('.bol').forEach(el=>{
+      const id=el.dataset.id, r=rows.find(x=>x.id===id); if(!r) return;
+      el.querySelector('[data-div]').onchange=e=>salvarDiv(id,e.target.checked?JSON.stringify({dia1:null,dia2:null,valor1:null}):null);
+      el.querySelector('[data-pagador]')?.addEventListener('change',e=>{const v=e.target.value;setCampo(id,'pagadorId',v,'Pagador do grupo salvo').then(()=>{const a=rows.find(x=>x.id===id);if(a)a.pagadorId=v;draw()})});
+      const form=el.querySelector('.bolform');
+      let espera=null;
+      if(form) form.addEventListener('change',()=>{clearTimeout(espera);espera=setTimeout(()=>{ // junta edições rápidas numa gravação só
+        if(!form.isConnected) return;
+        const v=parseMoney(form.querySelector('[data-v1]').value);
+        if(v!==null&&isNaN(v)){toast('Valor inválido. Use algo como 1.380,00.');return}
+        const dia=x=>{const n=parseInt(form.querySelector(x).value,10);return n>=1&&n<=31?n:null};
+        salvarDiv(id,JSON.stringify({dia1:dia('[data-d1]'),dia2:dia('[data-d2]'),valor1:v}));
+      },400)});
+    });
+  };
+  draw();
+}
+$('#boletosBtn').onclick=openBoletos;
 /* ---------- agrupar e desagrupar ---------- */
 let selecionados=new Set();
 function renderSelBar(){
@@ -1407,11 +1525,11 @@ $('#csvBtn').onclick=async()=>{
 };
 
 /* ---------- drawer ---------- */
-function closeDrawer(){$('#drawerRoot').innerHTML='';drawerUndo=null;if(pendingRender)render()}
+function closeDrawer(){$('#drawerRoot').innerHTML='';drawerUndo=null;painelVivo=null;if(pendingRender)render()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#drawerRoot').firstChild&&!editing)closeDrawer()});
 function shell(title,body,foot){
   const mesmo=$('#drawerRoot .drawer')?.getAttribute('aria-label')===title; // redesenho do mesmo painel: sem animar de novo
-  if(!mesmo) drawerUndo=null;
+  if(!mesmo){drawerUndo=null;painelVivo=null}
   $('#drawerRoot').innerHTML=`<div class="scrim" id="scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="dhead"><h2>${esc(title)}</h2><button class="x" id="dx" aria-label="Fechar">×</button></div><div class="dbody">${body}</div><div class="dfoot">${foot}</div></aside>`;
   if(mesmo) $('#drawerRoot .drawer').classList.add('noanim');
   $('#scrim').onclick=closeDrawer; $('#dx').onclick=closeDrawer;
