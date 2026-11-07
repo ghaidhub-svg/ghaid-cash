@@ -225,6 +225,9 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .dvprev{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px;font-size:13px}
 .dvprev div{display:flex;justify-content:space-between;gap:10px}
 .dvprev div span:last-child{font-weight:700;white-space:nowrap}
+.plhist div{align-items:center}
+.plhist div span:last-child{display:inline-flex;align-items:center;gap:8px}
+.plhist .mini{width:24px;height:24px;min-width:24px;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .dvfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
 .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
@@ -486,12 +489,27 @@ const DEFAULT_COLS=[
 /* mês de referência */
 const nowD=new Date();
 let refMes=`${nowD.getFullYear()}-${String(nowD.getMonth()+1).padStart(2,'0')}`;
+const MES_HOJE=refMes;
+/* histórico do valor do plano: campo planoHist = [{desde:'AAAA-MM', valor}].
+   O valor de um mês é o do último registro com "desde" até aquele mês. Sem histórico, vale valorMensal.
+   valorMensal continua guardando o valor de hoje (planilha e boletos antigos continuam certos). */
+const PLANO_BASE='0000-01';
+function planoHist(r){
+  let h=r&&r.planoHist; if(typeof h==='string'){try{h=JSON.parse(h)}catch(e){h=null}}
+  return Array.isArray(h)?h.filter(e=>e&&/^\d{4}-\d{2}$/.test(e.desde)).sort((a,b)=>a.desde<b.desde?-1:a.desde>b.desde?1:0):[];
+}
+function planoNoMes(r,m=refMes){
+  const h=planoHist(r); if(!h.length) return r?r.valorMensal:null;
+  let v=h[0].valor; for(const e of h) if(e.desde<=m) v=e.valor; return v;
+}
+const planoValor=(r,m)=>{const v=planoNoMes(r,m);return isNum(v)?v:0};
+const valorDe=(c,r)=>c.key==='valorMensal'?planoNoMes(r):r[c.key];
 function mesLabel(m){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1)}
 function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1+d,1);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`}
 function itemsOf(r,m=refMes){return Array.isArray(r.adicionaisItens)?r.adicionaisItens.filter(i=>i&&i.mes===m):[]}
 const CALC={
   adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0):null},
-  totalMes:r=>{const a=CALC.adicionais(r), pl=ehEsporadico(r)?null:r.valorMensal;return (isNum(pl)||a!=null)?(isNum(pl)?pl:0)+(a||0):null},
+  totalMes:r=>{const a=CALC.adicionais(r), pl=ehEsporadico(r)?null:planoNoMes(r);return (isNum(pl)||a!=null)?(isNum(pl)?pl:0)+(a||0):null},
   diferenca:r=>{const t=CALC.totalMes(r);return (isNum(r.valorBoleto)&&t!=null)?r.valorBoleto-t:null},
   liquidoNF:r=>isNum(r.valorNF)?r.valorNF-(isNum(r.issRetido)?r.issRetido:0):null,
 };
@@ -518,7 +536,7 @@ function parseMoney(s){
 }
 function fmt(col,r){
   if(col.type==='calc'){const v=CALC[col.key]?.(r);return v==null?'':brl.format(v)}
-  const v=r[col.key]; if(isEmpty(v)) return '';
+  const v=valorDe(col,r); if(isEmpty(v)) return '';
   if(col.type==='money') return isNum(v)?brl.format(v):String(v);
   return String(v);
 }
@@ -592,7 +610,7 @@ const ICON_GRUPO=SVG('<path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M2.5 12.5 12 
 const ICON_CONTA=SVG('<path d="M6 4v9a3 3 0 0 0 3 3h10"/><path d="M15 12l4 4-4 4"/>');
 const ICON_DESAGRUPAR='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M4 17h7M15 17h5"/></svg>';
 const tipoOpts=v=>TIPOS.map(([k,l])=>`<option value="${k}"${String(v||'').toLowerCase()===k?' selected':''}>${l}</option>`).join('');
-function colMiss(c,r){if(naoSeAplica(c,r))return false;return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
+function colMiss(c,r){if(naoSeAplica(c,r))return false;return c.type==='ok'?!isOk(r[c.key]):isEmpty(valorDe(c,r))}
 function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&c.type!=='tipo'&&podeVer(c)&&(!ASSIST()||EDITA_ASSIST.includes(c.key))&&colMiss(c,r))}
 function hasDiv(r){const d=CALC.diferenca(r);return d!=null&&Math.abs(d)>0.009}
 let toastT;function toast(m,acao,ms){const t=$('#toast');t.textContent=m;
@@ -651,7 +669,7 @@ function view(){
   const sc=cols.find(c=>c.key===sortKey)||cols[0];
   const cmp=(a,b)=>{
     let va,vb;
-    if(sc.type==='money'||sc.type==='calc'){va=sc.type==='calc'?CALC[sc.key](a):a[sc.key];vb=sc.type==='calc'?CALC[sc.key](b):b[sc.key];
+    if(sc.type==='money'||sc.type==='calc'){va=sc.type==='calc'?CALC[sc.key](a):valorDe(sc,a);vb=sc.type==='calc'?CALC[sc.key](b):valorDe(sc,b);
       va=isNum(va)?va:null;vb=isNum(vb)?vb:null;
       if(va==null&&vb==null) return coll.compare(a.cliente||'',b.cliente||'');
       if(va==null) return 1; if(vb==null) return -1;
@@ -726,7 +744,7 @@ function render(){
       if(c.type==='tipo_antigo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
-      const miss=c.required&&c.type!=='calc'&&isEmpty(r[c.key])&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
+      const miss=c.required&&c.type!=='calc'&&isEmpty(valorDe(c,r))&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       if(c.key==='valorNF'){const tem=!isEmpty(r[c.key]);return `<td class="money nfcell${tem?' hasis':''}" data-k="${c.key}"><div class="c${tem?' okv':' nfnao'}" title="${tem?'Valor da nota fiscal. Clique para mudar':'Sem nota fiscal. Clique para colocar o valor'}">${tem?esc(fmt(c,r)):'Não'}</div>${tem?`<button class="isbtn" type="button" data-nfmenu title="Opções" aria-label="Opções da nota fiscal">▾</button>`:''}</td>`}
       const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo','simnao'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
@@ -747,7 +765,7 @@ function render(){
     if(c.key==='tipo') return '<td class="sticky" data-k="tipo"><div class="c"></div></td>';
     if(c.key==='cliente'){const n=list.filter(r=>!ehConta(r)).length;return `<td class="sticky" data-k="cliente"><div class="c">Total · ${n} cliente${n>1?'s':''}</div></td>`}
     if((c.type!=='money'&&c.type!=='calc')||ASSIST()) return '<td><div class="c"></div></td>';
-    const vals=list.filter(r=>!naoSeAplica(c,r)).map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
+    const vals=list.filter(r=>!naoSeAplica(c,r)).map(r=>c.type==='calc'?CALC[c.key](r):valorDe(c,r)).filter(isNum);
     return `<td class="money"><div class="c">${vals.length?brl.format(vals.reduce((a,b)=>a+b,0)):''}</div></td>`;
   }).join('');
 }
@@ -790,6 +808,7 @@ $('#tbody').addEventListener('click',e=>{
   if(k==='cliente'){openClient(id);return}
   if(td.classList.contains('na')) return;
   if(k==='publicacoes'){openPub(id);return}
+  if(k==='valorMensal'&&!ASSIST()){abrirPlano(id);return}
   if(ASSIST()&&!EDITA_ASSIST.includes(k)) return;
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
   if(col.type==='ok'||col.type==='simnao'||col.type==='tipo'||td.classList.contains('na')) return;
@@ -897,7 +916,7 @@ function startEdit(td,id,col){
     if(save) await commit(id,col,raw);
     render();
     if(move){ // Tab para a próxima célula editável
-      const vc=visibleCols().filter(c=>c.type!=='calc'&&c.key!=='cliente');
+      const vc=visibleCols().filter(c=>c.type!=='calc'&&c.key!=='cliente'&&c.key!=='valorMensal'&&!c.items&&!['ok','tipo','simnao'].includes(c.type)); // valor do plano só pela janela
       const i=vc.findIndex(c=>c.key===col.key)+move;
       const next=vc[i]; const tr=document.querySelector(`tr[data-id="${CSS.escape(id)}"]`);
       if(next&&tr){const ntd=tr.querySelector(`td[data-k="${next.key}"]`);if(ntd)startEdit(ntd,id,next)}
@@ -1014,7 +1033,7 @@ $('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'ativos':'pend');
 
 /* ---------- adicionais (itens) ---------- */
 function emailText(r,items){
-  const plano=!semCobranca(r)&&!ehEsporadico(r)&&isNum(r.valorMensal)?r.valorMensal:0;
+  const plano=!semCobranca(r)&&!ehEsporadico(r)?planoValor(r):0;
   const sum=items.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
   const L=[`Resumo da cobrança · ${mesLabel(refMes)}`,''];
   if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`,'')}
@@ -1054,7 +1073,7 @@ function openItems(id){
         if(items[n].cortesia) return; // cortesia: o valor digitado fica guardado, mas não conta
         const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
       const clean=items.filter(i=>i.desc||isNum(i.valor));
-      const plano=!semCobranca(r)&&!ehEsporadico(r)&&isNum(r.valorMensal)?r.valorMensal:0, sum=clean.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
+      const plano=!semCobranca(r)&&!ehEsporadico(r)?planoValor(r):0, sum=clean.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
       const nCort=clean.filter(i=>i.cortesia).length;
       $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length-nCort})</span><span>${brl.format(sum)}</span></div>${nCort?`<div><span>Cortesias (${nCort})</span><span>${brl.format(0)}</span></div>`:''}<div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
       $('#itMail').value=emailText(r,clean);
@@ -1249,7 +1268,7 @@ function partesBoleto(r,div,total){
   if(!div||!isNum(total)||total<=0) return [{valor:total,venc:vPadrao,rotulo:''}];
   const v1=vencEscolhido(div.venc1,div.dia1)||vPadrao, v2=vencEscolhido(div.venc2,div.dia2);
   if(div.modo==='adicionais'){
-    const plano=isNum(r.valorMensal)?r.valorMensal:0, adic=r2(total-plano);
+    const plano=planoValor(r), adic=r2(total-plano);
     if(adic<=0) return [{valor:total,venc:v1,rotulo:'plano fixo; sem adicionais neste mês'}];
     if(plano<=0) return [{valor:total,venc:v2||v1,rotulo:'adicionais'}];
     return [{valor:plano,venc:v1,rotulo:'plano fixo'},{valor:adic,venc:v2,rotulo:'adicionais'}];
@@ -1288,7 +1307,7 @@ function textoBoletos(lista){
 function fecharDivisao(){document.querySelector('.modal')?.remove();document.querySelector('.modalscrim')?.remove()}
 function abrirDivisao(id,aoSalvar){
   const r=rows.find(x=>x.id===id); if(!r) return;
-  const total=tm(r), div=lerJSON(r.boleto2)||{}, plano=isNum(r.valorMensal)?r.valorMensal:0, adic=isNum(total)?r2(total-plano):0;
+  const total=tm(r), div=lerJSON(r.boleto2)||{}, plano=planoValor(r), adic=isNum(total)?r2(total-plano):0;
   let modo=div.modo==='adicionais'?'adicionais':'valor';
   const v1=vencEscolhido(div.venc1,div.dia1)||isoNoMes(r.diaEnvio)||'', v2=vencEscolhido(div.venc2,div.dia2)||'';
   fecharDivisao();
@@ -1330,6 +1349,52 @@ function abrirDivisao(id,aoSalvar){
     fecharDivisao(); aoSalvar(JSON.stringify(d));
   };
   ($('#dvD2').value?$('#dvSalvar'):$('#dvD2')).focus();
+}
+/* janela: mudar o valor do plano a partir de um mês, com a linha do tempo */
+function abrirPlano(id){
+  if(!canWrite){toast('Você só tem acesso de leitura.');return}
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const atual=planoNoMes(r), h=planoHist(r);
+  const nome=e=>e.desde===PLANO_BASE?'Até então':`Desde ${mesLabel(e.desde).toLowerCase()}`;
+  const linhas=h.length?h.slice().reverse().map(e=>`<div><span>${esc(nome(e))}</span><span>${isNum(e.valor)?brl.format(e.valor):'sem valor'}${e.desde!==PLANO_BASE?` <button class="mini" type="button" data-rmdesde="${e.desde}" aria-label="Apagar o registro ${esc(nome(e))}" title="Apagar este registro">×</button>`:''}</span></div>`).join('')
+    :`<div><span>Desde o início</span><span>${isNum(r.valorMensal)?brl.format(r.valorMensal):'sem valor'}</span></div>`;
+  fecharDivisao();
+  const scrim=document.createElement('div'); scrim.className='modalscrim'; scrim.onclick=fecharDivisao;
+  const m=document.createElement('div'); m.className='modal'; m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-label','Valor do plano');
+  m.innerHTML=`<h3>Valor do plano</h3>
+    <p class="sub" style="margin:0;font-size:13px">${esc(r.cliente||'')} · em ${esc(mesLabel(refMes).toLowerCase())}: ${isNum(atual)?brl.format(atual):'sem valor'}</p>
+    <div class="dvdatas">
+      <div class="field"><label for="plValor">Novo valor</label><input id="plValor" inputmode="decimal" placeholder="0,00" value="${isNum(atual)?moedaTxt(atual):''}"></div>
+      <div class="field"><label for="plDesde">Vale a partir de</label><input id="plDesde" type="month" value="${refMes}"></div>
+    </div>
+    <p class="sub" style="margin:0;font-size:12px">Os meses antes dessa data continuam com o valor anterior. Use para renovação ou mudança de plano.</p>
+    <div class="sec">Linha do tempo do plano</div>
+    <div class="dvprev plhist">${linhas}</div>
+    <div class="dvfoot"><span></span><div style="display:flex;gap:8px"><button class="btn" type="button" id="plCancel">Cancelar</button><button class="btn primary" type="button" id="plSalvar">Salvar</button></div></div>`;
+  document.body.append(scrim,m);
+  const gravar=async(nh,msg)=>{
+    const antes=copia(r), vHoje=nh.length?planoNoMes({planoHist:nh},MES_HOJE):r.valorMensal;
+    const novo={planoHist:nh.length?JSON.stringify(nh):null,valorMensal:isNum(vHoje)?vHoje:null};
+    Object.assign(r,novo); render();
+    try{await writeDoc(id,novo,'update');const a=rows.find(x=>x.id===id);if(a)Object.assign(a,novo);render();oferecerDesfazer(msg,[{id,antes}])}catch(e){handleWriteErr(e)}
+  };
+  $('#plCancel').onclick=fecharDivisao;
+  m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();fecharDivisao()}});
+  m.querySelectorAll('[data-rmdesde]').forEach(b=>b.onclick=()=>{
+    const d=b.dataset.rmdesde, nh=h.filter(e=>e.desde!==d);
+    fecharDivisao(); gravar(nh,`Registro de ${mesLabel(d).toLowerCase()} apagado`);
+  });
+  $('#plSalvar').onclick=()=>{
+    const v=parseMoney($('#plValor').value), desde=$('#plDesde').value;
+    if(v===null||isNaN(v)){toast('Digite o valor do plano. Use algo como 1.380,00.');$('#plValor').focus();return}
+    if(!/^\d{4}-\d{2}$/.test(desde)){toast('Escolha o mês em que o valor começa a valer.');$('#plDesde').focus();return}
+    let nh=h.slice();
+    if(!nh.length&&isNum(r.valorMensal)) nh=[{desde:PLANO_BASE,valor:r.valorMensal}]; // valor de antes vale para o passado
+    if(!nh.length) nh=[{desde:PLANO_BASE,valor:v}]; // cliente sem valor: vale para todos os meses
+    else{nh=nh.filter(e=>e.desde!==desde);nh.push({desde,valor:v});nh.sort((a,b)=>a.desde<b.desde?-1:1)}
+    fecharDivisao(); gravar(nh,`${r.cliente}: ${brl.format(v)} a partir de ${mesLabel(desde).toLowerCase()}`);
+  };
+  $('#plValor').focus(); $('#plValor').select();
 }
 function openBoletos(){
   if(ASSIST()) return;
@@ -1397,12 +1462,12 @@ function abrirAgrupar(){
   if(!canWrite){toast('Você só tem acesso de leitura.');return}
   const contas=[...selecionados].map(id=>rows.find(r=>r.id===id)).filter(r=>r&&!ehGrupo(r)&&!ehConta(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||''));
   if(contas.length<2){toast('Selecione pelo menos 2 clientes para agrupar.');return}
-  const soma=contas.reduce((s,r)=>s+(isNum(r.valorMensal)?r.valorMensal:0),0);
+  const soma=contas.reduce((s,r)=>s+planoValor(r),0);
   const nItens=contas.reduce((s,r)=>s+(Array.isArray(r.adicionaisItens)?r.adicionaisItens.length:0),0);
   const contato=(contas.find(r=>!isEmpty(r.contato)&&!ehIsento(r.contato))||{}).contato||'';
   shell('Agrupar clientes',`
     <p class="sub" style="margin:0;font-size:13px">O grupo vira uma linha com um só valor do plano, adicionais e total. As contas ficam logo abaixo dela, só com os dados de cadastro.</p>
-    <div class="imp">${contas.map(r=>`<div class="imp-row"><span class="nm">${esc(r.cliente||'sem nome')}</span><span class="tag">${isNum(r.valorMensal)?brl.format(r.valorMensal):'sem valor'}</span></div>`).join('')}
+    <div class="imp">${contas.map(r=>`<div class="imp-row"><span class="nm">${esc(r.cliente||'sem nome')}</span><span class="tag">${isNum(planoNoMes(r))?brl.format(planoNoMes(r)):'sem valor'}</span></div>`).join('')}
       <div class="imp-row soma"><span class="nm">Soma das contas</span><span class="tag">${brl.format(soma)}</span></div></div>
     <div class="field"><label for="gNome">Nome do grupo (quem paga)</label><input id="gNome" autocomplete="off" placeholder="Ex.: Grupo R. Selau"></div>
     <div class="field"><label for="gValor">Valor do plano do grupo</label><input id="gValor" inputmode="decimal" value="${moedaTxt(soma)}" placeholder="0,00"></div>
@@ -1440,7 +1505,7 @@ function abrirDesagrupar(gid){
   const voltam=itens.filter(dono), soltos=itens.filter(i=>!dono(i));
   shell(`Desagrupar ${g.cliente||'grupo'}`,`
     <p class="sub" style="margin:0;font-size:13px">As contas voltam a ser clientes normais, cada uma com o valor do plano que tinha antes de agrupar. A linha do grupo é apagada.</p>
-    <div class="imp">${contas.map(c=>`<div class="imp-row"><span class="nm">${esc(c.cliente||'sem nome')}</span><span class="tag">${isNum(c.valorMensal)?brl.format(c.valorMensal):'sem valor'}</span></div>`).join('')||'<div class="sub">Este grupo não tem contas.</div>'}</div>
+    <div class="imp">${contas.map(c=>`<div class="imp-row"><span class="nm">${esc(c.cliente||'sem nome')}</span><span class="tag">${isNum(planoNoMes(c))?brl.format(planoNoMes(c)):'sem valor'}</span></div>`).join('')||'<div class="sub">Este grupo não tem contas.</div>'}</div>
     ${voltam.length?`<p class="sub" style="margin:0;font-size:12px">${voltam.length} adicional(is) voltam para a conta de origem.</p>`:''}
     ${soltos.length&&contas.length?`<div class="field"><label for="dgPara">${soltos.length} adicional(is) lançado(s) no grupo vão para</label><select id="dgPara">${contas.map(c=>`<option value="${esc(c.id)}">${esc(c.cliente||'sem nome')}</option>`).join('')}</select></div>`:''}`,
     `<span></span><div style="display:flex;gap:8px"><button class="btn" id="dgCancel" type="button">Cancelar</button><button class="btn primary" id="dgSave" type="button">Desagrupar</button></div>`);
@@ -1558,7 +1623,7 @@ function renderDash(act,nArq){
 
   // divergências
   const dl=div.map(r=>({r,d:CALC.adicionais(r)})).sort((a,b)=>b.d-a.d).slice(0,5);
-  $('#chDiv').innerHTML=dl.length?dl.map(({r,d})=>`<div class="dv" tabindex="0" data-items="${esc(r.id)}"><span class="dn">${esc(r.cliente)}<span class="dd">${itemsOf(r).map(i=>esc(i.desc)).join(', ')} ·  plano ${brl.format(isNum(r.valorMensal)?r.valorMensal:0)} · total ${brl.format(tm(r))}</span></span><span class="dx pos">+${brl.format(d)}</span></div>`).join(''):'<div class="okmsg">Nenhum adicional lançado neste mês.</div>';
+  $('#chDiv').innerHTML=dl.length?dl.map(({r,d})=>`<div class="dv" tabindex="0" data-items="${esc(r.id)}"><span class="dn">${esc(r.cliente)}<span class="dd">${itemsOf(r).map(i=>esc(i.desc)).join(', ')} ·  plano ${brl.format(planoValor(r))} · total ${brl.format(tm(r))}</span></span><span class="dx pos">+${brl.format(d)}</span></div>`).join(''):'<div class="okmsg">Nenhum adicional lançado neste mês.</div>';
 }
 document.querySelector('.dash').addEventListener('click',e=>{
   const it=e.target.closest('[data-items]'); if(it){openItems(it.dataset.items);return}
@@ -1649,6 +1714,7 @@ function openClient(id){
     if(c.type==='tipo'&&id&&ehGrupo(r)) return `<div class="field"><label>Grupo</label><div class="calcv">${contasDe(r).length} conta(s): ${esc(contasDe(r).map(x=>x.cliente).join(', ')||'nenhuma')}</div></div>`;
     if(c.type==='tipo'&&id&&ehConta(r)) return `<div class="field"><label>Grupo</label><div class="calcv">Conta do grupo ${esc(grupoDe(r).cliente||'')}</div></div>`;
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
+    if(c.key==='valorMensal'&&id&&!ASSIST()){const v=planoNoMes(r);return `<div class="field${c.required&&isEmpty(v)?' miss':''}"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${isNum(v)?brl.format(v):esc(v??'sem valor')}</span><button class="btn" type="button" id="goPlano">Mudar valor do plano</button></div></div>`}
     if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
@@ -1667,6 +1733,7 @@ function openClient(id){
   $('#cancelBtn').onclick=closeDrawer;
   if($('#goItems')) $('#goItems').onclick=()=>openItems(id);
   if($('#goPub')) $('#goPub').onclick=()=>openPub(id);
+  if($('#goPlano')) $('#goPlano').onclick=()=>abrirPlano(id);
   if(ASSIST()&&id){$('#saveBtn').hidden=true;$('#cancelBtn').textContent='Fechar'}
   $('#f-cliente')?.focus();
   $('#saveBtn').onclick=async()=>{
