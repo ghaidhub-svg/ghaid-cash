@@ -309,9 +309,9 @@ td.items .c.sempreco,td.items .c.sempreco .cnt{color:var(--alert-text)}
 td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
 .itrow{display:grid;grid-template-columns:minmax(0,1fr) 120px 32px;gap:8px;align-items:center}
 .itrow input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0;width:100%}
-.itrow.c4,.ithead.c4{grid-template-columns:minmax(0,1fr) 104px auto 32px}
-.cort{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
-.cort input{width:16px;height:16px;margin:0;accent-color:var(--fg)}
+.itrow.c4,.ithead.c4{grid-template-columns:minmax(0,1fr) 104px 118px 32px}
+.itrow select.sit{height:38px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:12px;font-weight:600;background:var(--surface);color:var(--fg);min-width:0;width:100%;cursor:pointer}
+@media (max-width:560px){.itrow.c4{grid-template-columns:minmax(0,1fr) 96px 32px;grid-template-areas:"d v x" "s s s"}.itrow.c4 .d{grid-area:d}.itrow.c4 .v{grid-area:v}.itrow.c4 .sit{grid-area:s}.itrow.c4 .mini{grid-area:x}.ithead.c4{grid-template-columns:minmax(0,1fr) 96px 32px}.ithead.c4 span:nth-child(3){display:none}}
 .itrow input.v:disabled{background:var(--surface-2);color:var(--muted);font-style:italic}
 .itrow input.v{text-align:right;font-variant-numeric:tabular-nums}
 .itlist{display:flex;flex-direction:column;gap:8px}
@@ -507,8 +507,13 @@ const valorDe=(c,r)=>c.key==='valorMensal'?planoNoMes(r):r[c.key];
 function mesLabel(m){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1)}
 function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1+d,1);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`}
 function itemsOf(r,m=refMes){return Array.isArray(r.adicionaisItens)?r.adicionaisItens.filter(i=>i&&i.mes===m):[]}
+/* situação de um adicional: '' cobrar; cortesia, contrato e pago ficam registrados e não somam */
+const SITUACOES=[['','Cobrar'],['cortesia','Cortesia'],['contrato','No contrato'],['pago','Já pago']];
+const SIT_TEXTO={cortesia:'cortesia',contrato:'incluso no contrato',pago:'já pago'};
+const sitDe=i=>{const v=String(i&&i.sit||'').toLowerCase();return SIT_TEXTO[v]?v:(i&&i.cortesia?'cortesia':'')};
+const contaNoValor=i=>!sitDe(i)&&isNum(i.valor);
 const CALC={
-  adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0):null},
+  adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(contaNoValor(i)?i.valor:0),0):null},
   totalMes:r=>{const a=CALC.adicionais(r), pl=ehEsporadico(r)?null:planoNoMes(r);return (isNum(pl)||a!=null)?(isNum(pl)?pl:0)+(a||0):null},
   diferenca:r=>{const t=CALC.totalMes(r);return (isNum(r.valorBoleto)&&t!=null)?r.valorBoleto-t:null},
   liquidoNF:r=>isNum(r.valorNF)?r.valorNF-(isNum(r.issRetido)?r.issRetido:0):null,
@@ -754,9 +759,9 @@ function render(){
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
       if(c.items&&ASSIST()){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc).join(' · ')||'Clique para lançar adicionais')}">${it.length?`${it.length} ${it.length>1?'itens':'item'}`:'+ adicionar'}</div></td>`}
       if(c.items){const it=itemsOf(r);
-        // verde: todos os itens do mês foram vistos (têm valor ou são cortesia); vermelho: algum sem preço
-        const semP=it.filter(i=>!i.cortesia&&!isNum(i.valor)).length, visto=it.length>0&&!semP;
-        return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}${visto?' visto':''}${semP?' sempreco':''}" title="${esc(it.map(i=>i.desc+': '+(i.cortesia?'cortesia':isNum(i.valor)?brl.format(i.valor):'sem preço')).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}${semP?` · ${semP} sem preço`:''}</span>`:'+ adicionar'}</div></td>`}
+        // verde: todos os itens do mês foram vistos (têm valor ou uma situação); vermelho: algum sem preço
+        const semP=it.filter(i=>!sitDe(i)&&!isNum(i.valor)).length, visto=it.length>0&&!semP;
+        return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}${visto?' visto':''}${semP?' sempreco':''}" title="${esc(it.map(i=>i.desc+': '+(sitDe(i)?SIT_TEXTO[sitDe(i)]:isNum(i.valor)?brl.format(i.valor):'sem preço')).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}${semP?` · ${semP} sem preço`:''}</span>`:'+ adicionar'}</div></td>`}
       if(ehIsento(r[c.key])) extra+=' isento';
       return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(miss?'Falta preencher':txt)}">${miss?'?':esc(txt)}</div>${seta}</td>`;
     }).join('')+'</tr>';
@@ -1034,11 +1039,11 @@ $('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'ativos':'pend');
 /* ---------- adicionais (itens) ---------- */
 function emailText(r,items){
   const plano=!semCobranca(r)&&!ehEsporadico(r)?planoValor(r):0;
-  const sum=items.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
+  const sum=items.reduce((s,i)=>s+(contaNoValor(i)?i.valor:0),0);
   const L=[`Resumo da cobrança · ${mesLabel(refMes)}`,''];
   if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`,'')}
   L.push(`Plano mensal: ${brl.format(plano)}`);
-  if(items.length){L.push('','Adicionais do mês:');items.forEach(i=>L.push(`• ${i.desc||'Item'}: ${i.cortesia?'cortesia':brl.format(isNum(i.valor)?i.valor:0)}`));L.push(`Total de adicionais: ${brl.format(sum)}`)}
+  if(items.length){L.push('','Adicionais do mês:');items.forEach(i=>{const st=sitDe(i);L.push(`• ${i.desc||'Item'}: ${st?SIT_TEXTO[st]+(st==='pago'&&isNum(i.valor)&&i.valor>0?` (${brl.format(i.valor)})`:''):brl.format(isNum(i.valor)?i.valor:0)}`)});L.push(`Total de adicionais: ${brl.format(sum)}`)}
   L.push('',`Total do mês: ${brl.format(plano+sum)}`);
   return L.join('\n');
 }
@@ -1060,7 +1065,7 @@ function openItems(id){
   const draw=()=>{
     const body=`<div class="sec">${esc(mesLabel(refMes))}</div>
       <div class="ithead c4"><span>O que foi feito</span><span style="text-align:right">Valor final</span><span></span><span></span></div>
-      <div class="itlist">${items.map((i,n)=>`<div class="itrow c4" data-n="${n}"><input id="it-d-${n}" class="d" placeholder="Ex.: Folder, vídeo extra, dronagem" value="${esc(i.desc||'')}" aria-label="Descrição do item ${n+1}"><input id="it-v-${n}" class="v" inputmode="decimal" ${i.cortesia?'disabled placeholder="Cortesia" value=""':`placeholder="0,00" value="${isNum(i.valor)?i.valor.toFixed(2).replace('.',','):''}"`} aria-label="Valor do item ${n+1}"><label class="cort" title="Cortesia: fica registrado e não soma no valor"><input type="checkbox" class="ck" id="it-c-${n}"${i.cortesia?' checked':''}>Cortesia</label><button class="mini" type="button" data-rm="${n}" aria-label="Remover item ${n+1}">×</button></div>`).join('')}</div>
+      <div class="itlist">${items.map((i,n)=>`<div class="itrow c4" data-n="${n}"><input id="it-d-${n}" class="d" placeholder="Ex.: Folder, vídeo extra, dronagem" value="${esc(i.desc||'')}" aria-label="Descrição do item ${n+1}"><input id="it-v-${n}" class="v" inputmode="decimal" ${(st=>st==='cortesia'||st==='contrato'?`disabled placeholder="${st==='cortesia'?'Cortesia':'Contrato'}" value=""`:`placeholder="${st==='pago'?'Valor pago':'0,00'}" value="${isNum(i.valor)&&!(st==='pago'&&i.valor===0)?i.valor.toFixed(2).replace('.',','):''}"`)(sitDe(i))} aria-label="Valor do item ${n+1}"><select class="sit" id="it-s-${n}" data-prev="${sitDe(i)}" aria-label="Situação do item ${n+1}" title="Cortesia, no contrato e já pago ficam registrados e não somam no valor">${SITUACOES.map(([k,l])=>`<option value="${k}"${sitDe(i)===k?' selected':''}>${l}</option>`).join('')}</select><button class="mini" type="button" data-rm="${n}" aria-label="Remover item ${n+1}">×</button></div>`).join('')}</div>
       <div><button class="btn" type="button" id="itAdd">+ Adicionar item</button></div>
       <div class="itsum" id="itSum"></div>
       <div class="sec">Texto para o e-mail do boleto</div>
@@ -1069,23 +1074,23 @@ function openItems(id){
     redes=false; drawerUndo=desfazerItens; $('#itUndo').onclick=desfazerItens;
     const sync=()=>{
       document.querySelectorAll('.itrow').forEach(row=>{const n=+row.dataset.n;if(!items[n])return;items[n].desc=row.querySelector('.d').value.trim();
-        const ck=row.querySelector('.ck');items[n].cortesia=!!(ck&&ck.checked);
-        if(items[n].cortesia) return; // cortesia: o valor digitado fica guardado, mas não conta
+        const sel=row.querySelector('.sit');items[n].sit=sel?sel.value:'';delete items[n].cortesia;
+        if(items[n].sit==='cortesia'||items[n].sit==='contrato') return; // o valor digitado fica guardado, mas não conta
         const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
       const clean=items.filter(i=>i.desc||isNum(i.valor));
-      const plano=!semCobranca(r)&&!ehEsporadico(r)?planoValor(r):0, sum=clean.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
-      const nCort=clean.filter(i=>i.cortesia).length;
-      $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length-nCort})</span><span>${brl.format(sum)}</span></div>${nCort?`<div><span>Cortesias (${nCort})</span><span>${brl.format(0)}</span></div>`:''}<div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
+      const plano=!semCobranca(r)&&!ehEsporadico(r)?planoValor(r):0, sum=clean.reduce((s,i)=>s+(contaNoValor(i)?i.valor:0),0);
+      const nSit=k=>clean.filter(i=>sitDe(i)===k).length, nCort=clean.filter(i=>sitDe(i)).length;
+      $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length-nCort})</span><span>${brl.format(sum)}</span></div>${[['cortesia','Cortesias'],['contrato','No contrato'],['pago','Já pagos']].filter(([k])=>nSit(k)).map(([k,l])=>`<div><span>${l} (${nSit(k)})</span><span>não soma</span></div>`).join('')}<div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
       $('#itMail').value=emailText(r,clean);
       return clean;
     };
     sync(); syncAtual=sync;
     const lista=document.querySelector('.itlist');
     lista.addEventListener('input',sync);
-    lista.addEventListener('change',e=>{const ck=e.target.closest('.ck');if(!ck)return;
-      const n=+ck.closest('.itrow').dataset.n, ant=JSON.stringify(items.map((x,i)=>i===n?{...x,cortesia:!ck.checked}:x));
+    lista.addEventListener('change',e=>{const sel=e.target.closest('.sit');if(!sel)return;
+      const n=+sel.closest('.itrow').dataset.n, ant=JSON.stringify(items.map((x,i)=>i===n?{...x,sit:sel.dataset.prev||''}:x));
       hist.push(ant); antesFoco=null; sync(); draw();
-      document.getElementById((ck.checked?'it-c-':'it-v-')+n)?.focus()});
+      document.getElementById((sel.value===''||sel.value==='pago'?'it-v-':'it-s-')+n)?.focus()});
     lista.addEventListener('focusin',()=>{if(redes)return;sync();antesFoco=estado()});
     lista.addEventListener('focusout',()=>{if(redes)return;sync();if(antesFoco!==null&&estado()!==antesFoco)hist.push(antesFoco);antesFoco=null});
     document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();hist.push(estado());items.splice(+b.dataset.rm,1);if(!items.length)items.push({id:randHex(6),mes:refMes,desc:'',valor:null});draw()});
@@ -1097,7 +1102,7 @@ function openItems(id){
     $('#itSave').onclick=async()=>{
       if(!canWrite){toast('Você só tem acesso de leitura.');return}
       for(const row of document.querySelectorAll('.itrow')){const raw=row.querySelector('.v').value;if(raw.trim()&&isNaN(parseMoney(raw))){toast(`“${raw}” não é um valor válido. Use algo como 150,00.`);row.querySelector('.v').focus();return}}
-      const clean=sync().map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:i.cortesia?0:(isNum(i.valor)?i.valor:null),cortesia:!!i.cortesia}));
+      const clean=sync().map(i=>{const st=sitDe(i);return {id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:st==='cortesia'||st==='contrato'?0:(isNum(i.valor)?i.valor:(st?0:null)),sit:st,cortesia:st==='cortesia'}});
       const others=(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).filter(i=>i&&i.mes!==refMes);
       $('#itSave').disabled=true;
       const antes=copia(r);
