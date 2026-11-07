@@ -319,6 +319,8 @@ function listar(token) {
     var o = { id: c.id };
     VE_ASSIST.forEach(function (k) { if (k in c) o[k] = c[k]; });
     o.adicionaisItens = (c.adicionaisItens || []).map(function (i) { return { id: i.id, mes: i.mes, desc: i.desc }; });
+    // só o aviso de esporádico (cliente sem plano); o tipo dos demais não vai para a assistente
+    o.esporadico = String(c.tipo || '').toLowerCase() === 'esporadico';
     return o;
   });
 }

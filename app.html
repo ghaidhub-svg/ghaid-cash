@@ -199,6 +199,8 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolcfg .field{min-width:0}
 .bolcfg input{min-width:0;width:100%;box-sizing:border-box}
 .bol{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.bol.off{background:var(--surface-2)}
+.bol.off .bolhead,.bol.off .bolparte{color:var(--muted)}
 .bol.falta{border-color:var(--warn-line);background:var(--warn-soft)}
 .bolhead{display:flex;align-items:baseline;gap:10px}
 .bolhead strong{font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -433,6 +435,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
       <button class="chip" data-f="todos" aria-pressed="false">Todos</button>
       <button class="chip" data-f="ativos" aria-pressed="true">Ativos</button>
       <button class="chip" data-f="arq" aria-pressed="false">Arquivados</button>
+      <button class="chip" data-f="esp" aria-pressed="false" title="Clientes sem plano mensal, com atendimentos pontuais">Esporádicos</button>
       <button class="chip" data-f="pend" aria-pressed="false">Com pendência</button>
       <button class="chip" data-f="livre" aria-pressed="false" title="Parceria, permuta, filantropia e pago por outro cliente">Não pagantes</button>
     </div>
@@ -482,7 +485,7 @@ function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,
 function itemsOf(r,m=refMes){return Array.isArray(r.adicionaisItens)?r.adicionaisItens.filter(i=>i&&i.mes===m):[]}
 const CALC={
   adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0):null},
-  totalMes:r=>{const a=CALC.adicionais(r);return (isNum(r.valorMensal)||a!=null)?(isNum(r.valorMensal)?r.valorMensal:0)+(a||0):null},
+  totalMes:r=>{const a=CALC.adicionais(r), pl=ehEsporadico(r)?null:r.valorMensal;return (isNum(pl)||a!=null)?(isNum(pl)?pl:0)+(a||0):null},
   diferenca:r=>{const t=CALC.totalMes(r);return (isNum(r.valorBoleto)&&t!=null)?r.valorBoleto-t:null},
   liquidoNF:r=>isNum(r.valorNF)?r.valorNF-(isNum(r.issRetido)?r.issRetido:0):null,
 };
@@ -545,18 +548,22 @@ async function migrarStatus(){
   }catch(e){statusMigrado=false;handleWriteErr(e)}
 }
 /* Tipo do cliente: quem não é pagante (parceria, permuta, filantropia) ganha estrela e não tem cobrança */
-const TIPOS=[['','Pagante'],['parceria','Parceria'],['permuta','Permuta'],['filantropia','Filantropia'],['pagoporoutro','Pago por outro']];
+const TIPOS=[['','Pagante'],['esporadico','Esporádico'],['parceria','Parceria'],['permuta','Permuta'],['filantropia','Filantropia'],['pagoporoutro','Pago por outro']];
 const SVG=(d,fill)=>`<svg viewBox="0 0 24 24" aria-hidden="true" class="ti${fill?' fill':''}">${d}</svg>`;
 const TIPO_INFO={
   '':{icone:'<span class="ti rs" aria-hidden="true">R$</span>',desc:'Cliente que paga mensalidade.'},
   parceria:{icone:SVG('<path d="M12 2.6l2.8 5.9 6.5.8-4.8 4.5 1.2 6.4L12 17l-5.7 3.2 1.2-6.4-4.8-4.5 6.5-.8z"/>',1),desc:'Parceiro da agência. Sem cobrança.'},
   permuta:{icone:SVG('<path d="M20 12a8 8 0 0 1-14.2 5M4 12a8 8 0 0 1 14.2-5"/><path d="M18.6 3v4.4h-4.4M5.4 21v-4.4h4.4"/>'),desc:'Troca de serviços. Sem cobrança.'},
   filantropia:{icone:SVG('<path d="M12 20.5s-7.4-4.5-9.4-9C1.2 8.3 3.2 4.6 6.8 4.6c2 0 3.5 1 4.2 2.5.7-1.5 2.2-2.5 4.2-2.5 3.6 0 5.6 3.7 4.2 6.9-2 4.5-9.4 9-9.4 9z"/>',1),desc:'Trabalho social. Sem cobrança.'},
+  esporadico:{icone:SVG('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M12 13.2v4.6M9.7 15.5h4.6"/>'),desc:'Sem plano mensal. Paga só os serviços pontuais (adicionais) do mês em que for atendido.'},
   pagoporoutro:{icone:SVG('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),desc:'A cobrança vem junto com outro cliente. Veja em Observações.'},
 };
 const tipoChave=v=>{const k=String(v||'').toLowerCase();return TIPO_INFO[k]?k:''};
 const tipoLabel=v=>(TIPOS.find(t=>t[0]===String(v||'').toLowerCase())||TIPOS[0])[1];
-const semCobranca=r=>!!r&&TIPOS.slice(1).some(t=>t[0]===String(r.tipo||'').toLowerCase());
+const SEM_COB_TIPOS=['parceria','permuta','filantropia','pagoporoutro'];
+const semCobranca=r=>!!r&&SEM_COB_TIPOS.includes(String(r.tipo||'').trim().toLowerCase());
+/* esporádico: sem plano, paga só os adicionais do mês (a assistente recebe só o aviso esporadico=true) */
+const ehEsporadico=r=>!!r&&(String(r.tipo||'').trim().toLowerCase()==='esporadico'||r.esporadico===true);
 const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
 /* não pagante: só nome, tipo, publicações, adicionais e observações ficam ativos; o resto fica vazio (os dados não são apagados) */
 const ATIVOS_SEM_COB=['cliente','tipo','publicacoes','adicionais','obs'];
@@ -572,6 +579,7 @@ const NA_CONTA=['valorMensal','adicionais','totalMes','diaEnvio','valorNF','stat
 const naoSeAplica=(c,r)=>{
   if(ehGrupo(r)) return !ATIVOS_GRUPO.includes(c.key);
   if(ehConta(r)) return c.type==='money'||c.type==='calc'||c.type==='ok'||!!c.items||NA_CONTA.includes(c.key);
+  if(ehEsporadico(r)) return ['valorMensal','publicacoes'].includes(c.key)||(c.type==='ok'&&!((CALC.adicionais(r)||0)>0));
   return semCobranca(r)&&!ATIVOS_SEM_COB.includes(c.key);
 };
 const ICON_GRUPO=SVG('<path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M2.5 12.5 12 17.5l9.5-5"/><path d="M2.5 16.5 12 21.5l9.5-5"/>');
@@ -623,12 +631,13 @@ function view(){
   const passaBase=r=>{
     if(ASSIST()&&ehGrupo(r)) return false;
     if(filter==='arq'&&!r.arquivado) return false;
-    if((filter==='ativos'||filter==='pend'||filter==='livre')&&r.arquivado) return false;
+    if((filter==='ativos'||filter==='pend'||filter==='livre'||filter==='esp')&&r.arquivado) return false;
     return true;
   };
   const passa=r=>{
     if(!passaBase(r)) return false;
     if(filter==='livre'&&!semCobranca(r)) return false;
+    if(filter==='esp'&&!ehEsporadico(r)) return false;
     if(filter==='pend'&&!missing(r).length) return false;
     if(q){const hay=cols.map(c=>fmt(c,r)).join(' ').toLowerCase();if(!hay.includes(q))return false}
     return true;
@@ -667,6 +676,7 @@ function render(){
   document.querySelector('.chip[data-f="todos"]').textContent=`Todos (${rows.length})`;
   document.querySelector('.chip[data-f="ativos"]').textContent=`Ativos (${act.length})`;
   document.querySelector('.chip[data-f="arq"]').textContent=nArq?`Arquivados (${nArq})`:'Arquivados';
+  {const nE=act.filter(ehEsporadico).length;document.querySelector('.chip[data-f="esp"]').textContent=nE?`Esporádicos (${nE})`:'Esporádicos'}
   {const nL=act.filter(semCobranca).length;document.querySelector('.chip[data-f="livre"]').textContent=nL?`Não pagantes (${nL})`:'Não pagantes'}
   renderDash(act,nArq);
   renderColbar();
@@ -684,7 +694,7 @@ function render(){
   if(!rows.length||!list.length){
     $('#tbl').hidden=true;$('#emptyState').hidden=false;
     $('#emptyState').innerHTML=rows.length
-      ?(filter==='livre'?'<strong>Nenhum cliente não pagante</strong>Marque parceria, permuta ou filantropia na coluna Tipo para o cliente aparecer aqui.':filter==='arq'?'<strong>Nenhum cliente arquivado</strong>Clientes arquivados saem da tabela principal e dos totais, mas continuam guardados aqui.':'<strong>Nenhum cliente neste filtro</strong>Mude o filtro ou a busca para ver os demais.')
+      ?(filter==='esp'?'<strong>Nenhum cliente esporádico</strong>Escolha Esporádico na coluna Tipo para o cliente aparecer aqui.':filter==='livre'?'<strong>Nenhum cliente não pagante</strong>Marque parceria, permuta ou filantropia na coluna Tipo para o cliente aparecer aqui.':filter==='arq'?'<strong>Nenhum cliente arquivado</strong>Clientes arquivados saem da tabela principal e dos totais, mas continuam guardados aqui.':'<strong>Nenhum cliente neste filtro</strong>Mude o filtro ou a busca para ver os demais.')
       :'<strong>Nenhum cliente cadastrado</strong>Use “+ Novo cliente” para adicionar o primeiro.';
     return;
   }
@@ -706,7 +716,7 @@ function render(){
       if(c.type==='tipo'&&!ASSIST()&&grupo) return `<td class="tipo sticky" data-k="tipo"><div class="c"><span class="tipobtn tiinfo" tabindex="0" data-tip="<strong>Grupo</strong>Uma mensalidade só para ${contasDe(r).length} conta(s). Valor, adicionais e total ficam nesta linha.">${ICON_GRUPO}</span></div></td>`;
       if(c.type==='tipo'&&!ASSIST()&&conta) return `<td class="tipo sticky" data-k="tipo"><div class="c"><span class="tipobtn tiinfo conta" tabindex="0" data-tip="<strong>Conta do grupo</strong>Paga por ${esc(grupoDe(r).cliente||'')}. Os valores ficam na linha do grupo.">${ICON_CONTA}</span></div></td>`;
       if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
-      if(c.type==='tipo'){const k=tipoChave(r.tipo);return `<td class="tipo sticky" data-k="${c.key}"><div class="c"><button type="button" class="tipobtn${k?' livre':''}" data-tipomenu data-tip="<strong>${esc(tipoLabel(k))}</strong>${esc(TIPO_INFO[k].desc)} Clique para trocar." aria-label="Tipo: ${esc(tipoLabel(k))}. Clique para trocar.">${TIPO_INFO[k].icone}</button></div></td>`}
+      if(c.type==='tipo'){const k=tipoChave(r.tipo);return `<td class="tipo sticky" data-k="${c.key}"><div class="c"><button type="button" class="tipobtn${SEM_COB_TIPOS.includes(k)?' livre':''}" data-tipomenu data-tip="<strong>${esc(tipoLabel(k))}</strong>${esc(TIPO_INFO[k].desc)} Clique para trocar." aria-label="Tipo: ${esc(tipoLabel(k))}. Clique para trocar.">${TIPO_INFO[k].icone}</button></div></td>`}
       if(c.type==='tipo_antigo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
       if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=isOk(r[c.key]);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
@@ -807,7 +817,7 @@ function abrirMenuTipo(btn,id){
   const r=rows.find(x=>x.id===id); if(!r) return;
   const atual=tipoChave(r.tipo);
   const m=document.createElement('div'); m.className='ismenu tipomenu'; m.setAttribute('role','menu');
-  m.innerHTML=TIPOS.map(([k,l])=>`<button type="button" role="menuitemradio" aria-checked="${k===atual}" data-v="${k}" class="${k===atual?'atual':''}${k?' livre':''}">${TIPO_INFO[k].icone}<span>${esc(l)}</span></button>`).join('');
+  m.innerHTML=TIPOS.map(([k,l])=>`<button type="button" role="menuitemradio" aria-checked="${k===atual}" data-v="${k}" class="${k===atual?'atual':''}${SEM_COB_TIPOS.includes(k)?' livre':''}">${TIPO_INFO[k].icone}<span>${esc(l)}</span></button>`).join('');
   document.body.appendChild(m);
   const b=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
   m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.left,innerWidth-w-8))+'px';
@@ -1239,11 +1249,13 @@ function boletosDoMes(){
     if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
     const partes=partesBoleto(r,div,total);
     if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'vencimento (Dia de envio)');
-    return {r,pag,total,div,partes,faltas};
-  });
+    const esp=ehEsporadico(r), gerar=!esp||(lerJSON(r.boletoMeses)||[]).includes(refMes);
+    return {r,pag,total,div,partes,faltas,esp,gerar};
+  }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
 }
+const vaiNoTexto=b=>b.gerar&&!b.faltas.length;
 function textoBoletos(lista){
-  const cfg=cfgBoleto(), prontos=lista.filter(b=>!b.faltas.length);
+  const cfg=cfgBoleto(), prontos=lista.filter(vaiNoTexto);
   const L=[`Gerar boletos no Sicredi · ${mesLabel(refMes)}`,`Juros: ${cfg.juros} · Multa: ${cfg.multa}`,'',
     'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
     'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',''];
@@ -1251,7 +1263,7 @@ function textoBoletos(lista){
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
     const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
     L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente})`)}));
-  const pend=lista.filter(b=>b.faltas.length);
+  const pend=lista.filter(b=>b.gerar&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
 }
@@ -1305,21 +1317,22 @@ function abrirDivisao(id,aoSalvar){
 function openBoletos(){
   if(ASSIST()) return;
   const draw=()=>{
-    const cfg=cfgBoleto(), lista=boletosDoMes(), prontos=lista.filter(b=>!b.faltas.length);
+    const cfg=cfgBoleto(), lista=boletosDoMes(), prontos=lista.filter(vaiNoTexto), nEsp=lista.filter(b=>b.esp).length;
     const nBol=prontos.reduce((s,b)=>s+b.partes.length,0), soma=prontos.reduce((s,b)=>s+b.total,0);
     const card=b=>{
       const r=b.r, g=ehGrupo(r);
       const pagador=g?`<select data-pagador aria-label="Pagador do grupo ${esc(r.cliente)}">${contasDe(r).map(c=>`<option value="${esc(c.id)}"${c.id===b.pag.id?' selected':''}>Pagador: ${esc(c.cliente)}</option>`).join('')}</select> `:'';
-      return `<div class="bol${b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
-        <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
+      return `<div class="bol${!b.gerar?' off':b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
+        <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}${b.esp?' · esporádico':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
         ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de envio)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
-        ${b.faltas.length?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
+        ${b.esp?`<label class="boldiv"><input type="checkbox" data-gerar${b.gerar?' checked':''}> Gerar boleto neste mês</label>${b.gerar?'':'<div class="bolsub">Fora do texto do Claude in Chrome (por exemplo, pago por Pix).</div>'}`:''}
+        ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
         <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) pronto(s), somando ${brl.format(soma)}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de envio, neste mês.</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) pronto(s), somando ${brl.format(soma)}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de envio, neste mês.${nEsp?` ${nEsp} esporádico(s) com atendimento neste mês: marque os que vão por boleto.`:''}</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
@@ -1337,6 +1350,13 @@ function openBoletos(){
     document.querySelectorAll('.bol').forEach(el=>{
       const id=el.dataset.id;
       el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
+      el.querySelector('[data-gerar]')?.addEventListener('change',async e=>{
+        const r=rows.find(x=>x.id===id); if(!r) return;
+        const meses=new Set(lerJSON(r.boletoMeses)||[]); e.target.checked?meses.add(refMes):meses.delete(refMes);
+        const v=meses.size?JSON.stringify([...meses].sort()):null;
+        await setCampo(id,'boletoMeses',v,e.target.checked?`${r.cliente}: vai gerar boleto neste mês`:`${r.cliente}: sem boleto neste mês`);
+        const a=rows.find(x=>x.id===id); if(a) a.boletoMeses=v; draw();
+      });
       el.querySelector('[data-pagador]')?.addEventListener('change',e=>{const v=e.target.value;setCampo(id,'pagadorId',v,'Pagador do grupo salvo').then(()=>{const a=rows.find(x=>x.id===id);if(a)a.pagadorId=v;draw()})});
     });
   };
