@@ -207,11 +207,23 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
 .bolfalta{color:var(--alert-text);font-weight:600;font-size:12px}
-.boldiv{display:flex;align-items:center;gap:8px;cursor:pointer;width:fit-content}
-.boldiv input{width:16px;height:16px;margin:0;accent-color:var(--fg)}
-.bolform{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.bolform label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:var(--muted)}
-.bolform input{height:var(--ctl);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--fg);min-width:0}
+.bolbtn{height:32px;padding:0 12px;font-size:12px}
+.bolorig{color:var(--muted)}
+.modalscrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:35}
+.modal{position:fixed;z-index:36;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.modal h3{margin:0;font-size:18px;font-weight:700}
+.modos{display:flex;flex-direction:column;gap:8px}
+.modo{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font-size:13px}
+.modo:has(input:checked){border-color:var(--fg)}
+.modo input{margin:2px 0 0;width:16px;height:16px;accent-color:var(--fg);flex:none}
+.modo small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.dvdatas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dvdatas .field{min-width:0}
+.dvdatas input,.modal #dvValor{width:100%;box-sizing:border-box;min-width:0;height:var(--ctl);border:1px solid var(--line);border-radius:var(--r);padding:0 10px;font:inherit;background:var(--surface);color:var(--fg);color-scheme:light dark}
+.dvprev{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px;font-size:13px}
+.dvprev div{display:flex;justify-content:space-between;gap:10px}
+.dvprev div span:last-child{font-weight:700;white-space:nowrap}
+.dvfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
 .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 tr.haspend td.namecell{box-shadow:inset 3px 0 0 var(--warn-line)}
@@ -1177,21 +1189,45 @@ function openPub(id){
   draw();
 }
 /* ---------- boletos do mês: lista conferida para gerar no banco ----------
-   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = Dia de envio no mês de referência.
-   "Dividir em 2 boletos" fica salvo no cliente (campo boleto2) e vale para os próximos meses. */
-const BOLETO_PADRAO={juros:'0,25% ao mês',multa:'1,00% após o vencimento'};
-const cfgBoleto=()=>({...BOLETO_PADRAO,...(cfgFlags.boleto||{})});
+   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = coluna Dia de envio no mês de referência.
+   "Dividir em 2 boletos" fica salvo no cliente (campo boleto2):
+     modo "valor": o total em duas partes (valor do 1º escolhido, o 2º é o resto);
+     modo "adicionais": plano fixo num boleto e adicionais do mês em outro.
+   As datas escolhidas valem no mês delas; nos outros meses vale o mesmo dia do mês. */
+const BOLETO_PADRAO={juros:'R$ 0,25 ao dia',multa:'1% ao mês'};
+const BOLETO_ANTIGO={juros:'0,25% ao mês',multa:'1,00% após o vencimento'};
+const cfgBoleto=()=>{const s=cfgFlags.boleto||{};const antigo=s.juros===BOLETO_ANTIGO.juros&&s.multa===BOLETO_ANTIGO.multa;return antigo?{...BOLETO_PADRAO}:{...BOLETO_PADRAO,...s}};
 const lerJSON=v=>{if(!v)return null;if(typeof v==='object')return v;try{return JSON.parse(v)}catch(e){return null}};
 const valido=v=>!isEmpty(v)&&!ehIsento(v);
-function dataVenc(dia){
+const dataBR=iso=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');return m?`${m[3]}/${m[2]}/${m[1]}`:null};
+function isoNoMes(dia){ // dia do mês (número ou texto) dentro do mês de referência, em AAAA-MM-DD
   const d=parseInt(String(dia??'').trim(),10); if(!(d>=1&&d<=31)) return null;
   const [y,m]=refMes.split('-').map(Number), ult=new Date(y,m,0).getDate();
-  return `${String(Math.min(d,ult)).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+  return `${y}-${String(m).padStart(2,'0')}-${String(Math.min(d,ult)).padStart(2,'0')}`;
+}
+const dataVenc=dia=>dataBR(isoNoMes(dia));
+function vencEscolhido(iso,diaAntigo){ // data salva: vale no mês dela; nos outros meses, o mesmo dia
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return iso.slice(0,7)===refMes?iso:isoNoMes(+iso.slice(8,10));
+  return isoNoMes(diaAntigo);
 }
 function pagadorDe(r){
   if(!ehGrupo(r)) return r;
   const cs=contasDe(r);
   return cs.find(c=>c.id===String(r.pagadorId||''))||cs.find(c=>valido(c.razao)&&valido(c.doc))||cs[0]||r;
+}
+const r2=n=>Math.round(n*100)/100;
+function partesBoleto(r,div,total){
+  const vPadrao=isoNoMes(r.diaEnvio);
+  if(!div||!isNum(total)||total<=0) return [{valor:total,venc:vPadrao,rotulo:''}];
+  const v1=vencEscolhido(div.venc1,div.dia1)||vPadrao, v2=vencEscolhido(div.venc2,div.dia2);
+  if(div.modo==='adicionais'){
+    const plano=isNum(r.valorMensal)?r.valorMensal:0, adic=r2(total-plano);
+    if(adic<=0) return [{valor:total,venc:v1,rotulo:'plano fixo; sem adicionais neste mês'}];
+    if(plano<=0) return [{valor:total,venc:v2||v1,rotulo:'adicionais'}];
+    return [{valor:plano,venc:v1,rotulo:'plano fixo'},{valor:adic,venc:v2,rotulo:'adicionais'}];
+  }
+  const p1=isNum(div.valor1)&&div.valor1>0&&div.valor1<total?div.valor1:r2(total/2);
+  return [{valor:p1,venc:v1,rotulo:''},{valor:r2(total-p1),venc:v2,rotulo:''}];
 }
 function boletosDoMes(){
   return rows.filter(r=>!r.arquivado&&!ehConta(r)&&!semCobranca(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>{
@@ -1200,12 +1236,8 @@ function boletosDoMes(){
     if(!valido(pag.doc)) faltas.push('CNPJ/CPF');
     if(!isNum(total)||total<=0) faltas.push('valor');
     if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
-    let partes;
-    if(div&&isNum(total)&&total>0){
-      const v1=isNum(div.valor1)&&div.valor1>0&&div.valor1<total?div.valor1:Math.round(total*50)/100;
-      partes=[{valor:v1,venc:dataVenc(div.dia1||r.diaEnvio)},{valor:Math.round((total-v1)*100)/100,venc:dataVenc(div.dia2)}];
-    }else partes=[{valor:total,venc:dataVenc(r.diaEnvio)}];
-    if(partes.some(x=>!x.venc)) faltas.push('vencimento (dia de envio)');
+    const partes=partesBoleto(r,div,total);
+    if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'vencimento (Dia de envio)');
     return {r,pag,total,div,partes,faltas};
   });
 }
@@ -1216,10 +1248,58 @@ function textoBoletos(lista){
     'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',''];
   let n=0;
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
-    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${x.venc}${b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}`:''} (cliente: ${b.r.cliente})`)}));
+    const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente})`)}));
   const pend=lista.filter(b=>b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
+}
+/* janela para escolher como dividir e as datas */
+function fecharDivisao(){document.querySelector('.modal')?.remove();document.querySelector('.modalscrim')?.remove()}
+function abrirDivisao(id,aoSalvar){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const total=tm(r), div=lerJSON(r.boleto2)||{}, plano=isNum(r.valorMensal)?r.valorMensal:0, adic=isNum(total)?r2(total-plano):0;
+  let modo=div.modo==='adicionais'?'adicionais':'valor';
+  const v1=vencEscolhido(div.venc1,div.dia1)||isoNoMes(r.diaEnvio)||'', v2=vencEscolhido(div.venc2,div.dia2)||'';
+  fecharDivisao();
+  const scrim=document.createElement('div'); scrim.className='modalscrim'; scrim.onclick=fecharDivisao;
+  const m=document.createElement('div'); m.className='modal'; m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-label','Dividir em 2 boletos');
+  m.innerHTML=`<h3>Dividir em 2 boletos</h3>
+    <p class="sub" style="margin:0;font-size:13px">${esc(r.cliente||'')} · total ${isNum(total)?brl.format(total):'sem valor'}</p>
+    <div class="modos">
+      <label class="modo"><input type="radio" name="dvModo" value="valor"${modo==='valor'?' checked':''}><span><strong>Dividir o valor total</strong><small>Você escolhe o valor do 1º; o 2º é o restante.</small></span></label>
+      <label class="modo"><input type="radio" name="dvModo" value="adicionais"${modo==='adicionais'?' checked':''}><span><strong>Plano fixo e adicionais separados</strong><small>Plano ${brl.format(plano)} num boleto, adicionais ${brl.format(Math.max(0,adic))} no outro.</small></span></label>
+    </div>
+    <div class="field" id="dvValorWrap"><label for="dvValor">Valor do 1º boleto</label><input id="dvValor" inputmode="decimal" placeholder="Metade: ${isNum(total)?moedaTxt(r2(total/2)):'0,00'}" value="${isNum(div.valor1)?moedaTxt(div.valor1):''}"></div>
+    <div class="dvdatas">
+      <div class="field"><label for="dvD1">Data do 1º boleto</label><input id="dvD1" type="date" value="${v1}"></div>
+      <div class="field"><label for="dvD2">Data do 2º boleto</label><input id="dvD2" type="date" value="${v2}"></div>
+    </div>
+    <div class="dvprev" id="dvPrev"></div>
+    <div class="dvfoot">${r.boleto2?'<button class="btn" type="button" id="dvRemover">Voltar a boleto único</button>':'<span></span>'}<div style="display:flex;gap:8px"><button class="btn" type="button" id="dvCancel">Cancelar</button><button class="btn primary" type="button" id="dvSalvar">Salvar divisão</button></div></div>`;
+  document.body.append(scrim,m);
+  const montar=()=>{
+    modo=m.querySelector('input[name="dvModo"]:checked').value;
+    const v=parseMoney($('#dvValor').value);
+    return {modo,valor1:modo==='valor'&&isNum(v)?v:null,venc1:$('#dvD1').value||null,venc2:$('#dvD2').value||null};
+  };
+  const prever=()=>{
+    const d=montar(); $('#dvValorWrap').hidden=d.modo!=='valor';
+    const ps=partesBoleto(r,d,total);
+    $('#dvPrev').innerHTML=ps.map((x,i)=>`<div><span>${ps.length>1?`${i+1}º boleto`:'Boleto único'}${x.rotulo?` · ${esc(x.rotulo)}`:''}</span><span>${isNum(x.valor)?brl.format(x.valor):''} · ${x.venc?dataBR(x.venc):'escolha a data'}</span></div>`).join('');
+  };
+  m.addEventListener('input',prever); m.addEventListener('change',prever); prever();
+  $('#dvCancel').onclick=fecharDivisao;
+  m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();fecharDivisao()}});
+  if($('#dvRemover')) $('#dvRemover').onclick=()=>{fecharDivisao();aoSalvar(null)};
+  $('#dvSalvar').onclick=()=>{
+    const d=montar();
+    if(d.modo==='valor'){const v=parseMoney($('#dvValor').value);if(v!==null&&(isNaN(v)||!isNum(total)||v<=0||v>=total)){toast('Valor do 1º boleto precisa ser maior que zero e menor que o total.');$('#dvValor').focus();return}}
+    if(!d.venc1){toast('Escolha a data do 1º boleto.');$('#dvD1').focus();return}
+    if(!d.venc2){toast('Escolha a data do 2º boleto.');$('#dvD2').focus();return}
+    fecharDivisao(); aoSalvar(JSON.stringify(d));
+  };
+  ($('#dvD2').value?$('#dvSalvar'):$('#dvD2')).focus();
 }
 function openBoletos(){
   if(ASSIST()) return;
@@ -1227,22 +1307,18 @@ function openBoletos(){
     const cfg=cfgBoleto(), lista=boletosDoMes(), prontos=lista.filter(b=>!b.faltas.length);
     const nBol=prontos.reduce((s,b)=>s+b.partes.length,0), soma=prontos.reduce((s,b)=>s+b.total,0);
     const card=b=>{
-      const r=b.r, g=ehGrupo(r), dv=b.div||{};
+      const r=b.r, g=ehGrupo(r);
       const pagador=g?`<select data-pagador aria-label="Pagador do grupo ${esc(r.cliente)}">${contasDe(r).map(c=>`<option value="${esc(c.id)}"${c.id===b.pag.id?' selected':''}>Pagador: ${esc(c.cliente)}</option>`).join('')}</select> `:'';
       return `<div class="bol${b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
         <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
-        ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}`:'Boleto único'} · venc. ${x.venc||'sem data'}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
+        ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de envio)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
         ${b.faltas.length?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
-        <label class="boldiv"><input type="checkbox" data-div${b.div?' checked':''}> Dividir em 2 boletos</label>
-        ${b.div?`<div class="bolform">
-          <label>Valor do 1º<input data-v1 inputmode="decimal" placeholder="metade" value="${isNum(dv.valor1)?moedaTxt(dv.valor1):''}"></label>
-          <label>Dia do 1º<input data-d1 inputmode="numeric" placeholder="${esc(String(r.diaEnvio??''))}" value="${esc(String(dv.dia1??''))}"></label>
-          <label>Dia do 2º<input data-d2 inputmode="numeric" placeholder="Ex.: 25" value="${esc(String(dv.dia2??''))}"></label></div>`:''}
+        <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) pronto(s), somando ${brl.format(soma)}. Não pagantes, contas de grupo e arquivados ficam de fora. O vencimento é o Dia de envio neste mês.</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) pronto(s), somando ${brl.format(soma)}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de envio, neste mês.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
@@ -1258,18 +1334,9 @@ function openBoletos(){
     // grava e garante o valor novo na linha atual (uma leitura antiga da planilha pode ter chegado no meio)
     const salvarDiv=async(id,valor)=>{await setCampo(id,'boleto2',valor,valor?'Divisão em 2 boletos salva':'Volta a ser boleto único');const a=rows.find(x=>x.id===id);if(a)a.boleto2=valor;draw()};
     document.querySelectorAll('.bol').forEach(el=>{
-      const id=el.dataset.id, r=rows.find(x=>x.id===id); if(!r) return;
-      el.querySelector('[data-div]').onchange=e=>salvarDiv(id,e.target.checked?JSON.stringify({dia1:null,dia2:null,valor1:null}):null);
+      const id=el.dataset.id;
+      el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
       el.querySelector('[data-pagador]')?.addEventListener('change',e=>{const v=e.target.value;setCampo(id,'pagadorId',v,'Pagador do grupo salvo').then(()=>{const a=rows.find(x=>x.id===id);if(a)a.pagadorId=v;draw()})});
-      const form=el.querySelector('.bolform');
-      let espera=null;
-      if(form) form.addEventListener('change',()=>{clearTimeout(espera);espera=setTimeout(()=>{ // junta edições rápidas numa gravação só
-        if(!form.isConnected) return;
-        const v=parseMoney(form.querySelector('[data-v1]').value);
-        if(v!==null&&isNaN(v)){toast('Valor inválido. Use algo como 1.380,00.');return}
-        const dia=x=>{const n=parseInt(form.querySelector(x).value,10);return n>=1&&n<=31?n:null};
-        salvarDiv(id,JSON.stringify({dia1:dia('[data-d1]'),dia2:dia('[data-d2]'),valor1:v}));
-      },400)});
     });
   };
   draw();
