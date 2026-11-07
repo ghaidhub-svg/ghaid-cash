@@ -314,7 +314,8 @@ function redefinirDona() {
 function listar(token) {
   var s = sessao_(token), lista = listar_();
   if (s.papel === 'dona') return lista;
-  return lista.map(function (c) {
+  // linhas de grupo (várias contas numa mensalidade só) são só da dona
+  return lista.filter(function (c) { return String(c.tipo || '').toLowerCase() !== 'grupo'; }).map(function (c) {
     var o = { id: c.id };
     VE_ASSIST.forEach(function (k) { if (k in c) o[k] = c[k]; });
     o.adicionaisItens = (c.adicionaisItens || []).map(function (i) { return { id: i.id, mes: i.mes, desc: i.desc }; });

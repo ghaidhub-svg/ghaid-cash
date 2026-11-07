@@ -184,6 +184,17 @@ td .c.isento{color:var(--muted);font-style:italic}
 #pubSum{font-size:13px;font-weight:600}
 #pubSum.warn{color:var(--bad)}
 .assist .dash,.assist #resetOkBtn,.assist #colsBtn,.assist #csvBtn,.assist .colbar,.assist .chip[data-f="arq"],.assist .chip[data-f="livre"],.assist #listBtn,.assist #newBtn,.assist .act{display:none!important}
+.selbox{width:16px;height:16px;margin:0;flex:none;accent-color:var(--fg);cursor:pointer}
+.gbadge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;color:var(--muted);border:1px solid var(--line)}
+tr.grupo td.namecell .nm{font-weight:700}
+tr.conta td.namecell .c{padding-left:30px;font-weight:500}
+.tipobtn.tiinfo{cursor:help}
+.tipobtn.tiinfo.conta{color:var(--muted)}
+.selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);font-size:13px}
+.selbar span{margin-right:auto}
+.imp-row.soma{border-style:dashed}
+.imp-row.soma .tag{color:var(--fg)}
+.toastbtn{margin-left:14px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .badge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;background:var(--warn-soft);color:var(--alert-text);border:1px solid var(--warn-line)}
 .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 tr.haspend td.namecell{box-shadow:inset 3px 0 0 var(--warn-line)}
@@ -404,6 +415,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
   </div>
   <div class="colbar" id="colbar" role="group" aria-label="Mostrar colunas"></div>
   <div class="sortnote" id="sortNote"></div>
+  <div class="selbar" id="selBar" hidden></div>
 
   <div class="tablebox" id="tableBox">
     <div class="empty" id="emptyState"><strong>Carregando seus clientes</strong>A tabela aparece aqui assim que os dados chegarem. Para começar do zero, use “+ Novo cliente”.</div>
@@ -518,12 +530,55 @@ const semCobranca=r=>!!r&&TIPOS.slice(1).some(t=>t[0]===String(r.tipo||'').toLow
 const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
 /* não pagante: só nome, tipo, publicações, adicionais e observações ficam ativos; o resto fica vazio (os dados não são apagados) */
 const ATIVOS_SEM_COB=['cliente','tipo','publicacoes','adicionais','obs'];
-const naoSeAplica=(c,r)=>semCobranca(r)&&!ATIVOS_SEM_COB.includes(c.key);
+/* ---------- grupos: várias contas pagas por uma mensalidade só ----------
+   O grupo é uma linha a mais (tipo "grupo") com valor do plano, adicionais e total.
+   Cada conta guarda o id do grupo em grupoId e não mostra valores próprios. */
+const ehGrupo=r=>!!r&&String(r.tipo||'').trim().toLowerCase()==='grupo';
+const grupoDe=r=>{if(!r||isEmpty(r.grupoId))return null;const g=rows.find(x=>x.id===String(r.grupoId));return ehGrupo(g)?g:null};
+const ehConta=r=>!!grupoDe(r);
+const contasDe=g=>rows.filter(r=>String(r.grupoId||'')===g.id).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||''));
+const ATIVOS_GRUPO=['cliente','tipo','valorMensal','adicionais','totalMes','diaEnvio','contato','valorNF','status','obs'];
+const NA_CONTA=['valorMensal','adicionais','totalMes','diaEnvio','valorNF','status','valorBoleto','issRetido','diferenca','liquidoNF'];
+const naoSeAplica=(c,r)=>{
+  if(ehGrupo(r)) return !ATIVOS_GRUPO.includes(c.key);
+  if(ehConta(r)) return c.type==='money'||c.type==='calc'||c.type==='ok'||!!c.items||NA_CONTA.includes(c.key);
+  return semCobranca(r)&&!ATIVOS_SEM_COB.includes(c.key);
+};
+const ICON_GRUPO=SVG('<path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M2.5 12.5 12 17.5l9.5-5"/><path d="M2.5 16.5 12 21.5l9.5-5"/>');
+const ICON_CONTA=SVG('<path d="M6 4v9a3 3 0 0 0 3 3h10"/><path d="M15 12l4 4-4 4"/>');
+const ICON_DESAGRUPAR='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M4 17h7M15 17h5"/></svg>';
 const tipoOpts=v=>TIPOS.map(([k,l])=>`<option value="${k}"${String(v||'').toLowerCase()===k?' selected':''}>${l}</option>`).join('');
 function colMiss(c,r){if(naoSeAplica(c,r))return false;return c.type==='ok'?!isOk(r[c.key]):isEmpty(r[c.key])}
 function missing(r){return cols.filter(c=>c.required&&c.type!=='calc'&&c.type!=='tipo'&&podeVer(c)&&(!ASSIST()||EDITA_ASSIST.includes(c.key))&&colMiss(c,r))}
 function hasDiv(r){const d=CALC.diferenca(r);return d!=null&&Math.abs(d)>0.009}
-let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+let toastT;function toast(m,acao,ms){const t=$('#toast');t.textContent=m;
+  if(acao){const b=document.createElement('button');b.type='button';b.className='toastbtn';b.textContent=acao.label;b.onclick=()=>{t.hidden=true;acao.fn()};t.append(b)}
+  t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,ms||(acao?8000:2600))}
+/* ---------- desfazer ----------
+   Antes de cada mudança guardamos uma cópia das linhas afetadas. Desfazer regrava essas cópias
+   (ou apaga a linha que foi criada). Vale para a última mudança, por alguns segundos. */
+const copia=r=>r?JSON.parse(JSON.stringify(r)):null;
+let ultimoDesfazer=null, drawerUndo=null;
+function oferecerDesfazer(msg,estados){
+  ultimoDesfazer={estados,ate:Date.now()+15000};
+  toast(msg,{label:'Desfazer',fn:desfazer},8000);
+}
+async function desfazer(){
+  const u=ultimoDesfazer; if(!u) return; ultimoDesfazer=null;
+  if(!canWrite){toast('Você só tem acesso de leitura.');return}
+  u.estados.forEach(({id,antes})=>{const i=rows.findIndex(x=>x.id===id);
+    if(antes){if(i>=0)rows[i]=copia(antes);else rows.push(copia(antes))}else if(i>=0)rows.splice(i,1)});
+  render();
+  try{await writeMany(u.estados.map(({id,antes})=>antes?[id,copia(antes),'set']:[id,null,'delete']));toast('Desfeito')}
+  catch(e){handleWriteErr(e)}
+}
+document.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.shiftKey||e.altKey||String(e.key).toLowerCase()!=='z') return;
+  const aberto=document.querySelector('#drawerRoot .drawer');
+  if(aberto){if(drawerUndo){e.preventDefault();drawerUndo()}return}
+  const a=document.activeElement; if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable)) return;
+  if(ultimoDesfazer&&Date.now()<ultimoDesfazer.ate){e.preventDefault();desfazer()}
+});
 function setSync(state,txt){$('#syncDot').className='dot '+(state||'');$('#syncTxt').textContent=txt}
 function notice(m){const n=$('#notice');if(!m){n.hidden=true;return}n.textContent=m;n.hidden=false}
 
@@ -535,16 +590,21 @@ const podeVer=c=>!ASSIST()||COLS_ASSIST.includes(c.key);
 function visibleCols(){return cols.filter(c=>ASSIST()?podeVer(c):c.visible)}
 function view(){
   const q=query.trim().toLowerCase();
-  let list=rows.filter(r=>{
+  const passaBase=r=>{
+    if(ASSIST()&&ehGrupo(r)) return false;
     if(filter==='arq'&&!r.arquivado) return false;
     if((filter==='ativos'||filter==='pend'||filter==='livre')&&r.arquivado) return false;
+    return true;
+  };
+  const passa=r=>{
+    if(!passaBase(r)) return false;
     if(filter==='livre'&&!semCobranca(r)) return false;
     if(filter==='pend'&&!missing(r).length) return false;
     if(q){const hay=cols.map(c=>fmt(c,r)).join(' ').toLowerCase();if(!hay.includes(q))return false}
     return true;
-  });
+  };
   const sc=cols.find(c=>c.key===sortKey)||cols[0];
-  list.sort((a,b)=>{
+  const cmp=(a,b)=>{
     let va,vb;
     if(sc.type==='money'||sc.type==='calc'){va=sc.type==='calc'?CALC[sc.key](a):a[sc.key];vb=sc.type==='calc'?CALC[sc.key](b):b[sc.key];
       va=isNum(va)?va:null;vb=isNum(vb)?vb:null;
@@ -554,15 +614,24 @@ function view(){
     va=isEmpty(a[sc.key])?null:String(a[sc.key]);vb=isEmpty(b[sc.key])?null:String(b[sc.key]);
     if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1;
     return coll.compare(va,vb)*sortDir||coll.compare(a.cliente||'',b.cliente||'');
-  });
-  return list;
+  };
+  const passou=new Set(rows.filter(passa).map(r=>r.id));
+  // o grupo aparece quando ele passa no filtro ou quando alguma conta dele passa
+  const topo=rows.filter(r=>!ehConta(r)&&(passou.has(r.id)||(ehGrupo(r)&&passaBase(r)&&contasDe(r).some(c=>passou.has(c.id)))));
+  topo.sort(cmp);
+  const out=[];
+  for(const r of topo){
+    out.push(r);
+    if(ehGrupo(r)) out.push(...contasDe(r).filter(c=>passou.has(c.id)||(passou.has(r.id)&&passaBase(c))));
+  }
+  return out;
 }
 function render(){
   if(editing){pendingRender=true;return}
   pendingRender=false;
   // stats
   const act=rows.filter(r=>!r.arquivado), nArq=rows.length-act.length;
-  $('#sClientes').textContent=act.length;
+  $('#sClientes').textContent=act.filter(r=>!ehConta(r)).length;
   $('#sTotal').textContent=brl.format(act.reduce((s,r)=>s+(isNum(tm(r))?tm(r):0),0));
   $('#sPend').textContent=act.filter(r=>missing(r).length).length;
   document.querySelector('.chip[data-f="todos"]').textContent=`Todos (${rows.length})`;
@@ -571,6 +640,7 @@ function render(){
   {const nL=act.filter(semCobranca).length;document.querySelector('.chip[data-f="livre"]').textContent=nL?`Não pagantes (${nL})`:'Não pagantes'}
   renderDash(act,nArq);
   renderColbar();
+  renderSelBar();
   // sort note
   const sc=cols.find(c=>c.key===sortKey);
   $('#sortNote').innerHTML=(sortKey==='cliente'&&sortDir===1)
@@ -591,12 +661,19 @@ function render(){
   $('#thead').innerHTML=vc.map(c=>`<th data-k="${c.key}" draggable="${c.locked?'false':'true'}" class="${c.key==='cliente'||c.key==='tipo'?'sticky':''}" scope="col"><div class="h" title="Clique para ordenar${c.locked?'':' · arraste para mover'}">${esc(c.label)}${c.required?'<span class="req" title="Obrigatório">•</span>':''}${sortKey===c.key?`<span class="arrow">${sortDir===1?'▲':'▼'}</span>`:''}</div></th>`).join('');
   $('#tbody').innerHTML=list.map(r=>{
     const m=missing(r);
-    return `<tr data-id="${esc(r.id)}" class="${m.length&&!r.arquivado?'haspend':''}${r.arquivado?' archived':''}">`+vc.map(c=>{
+    const grupo=ehGrupo(r), conta=!grupo&&ehConta(r);
+    return `<tr data-id="${esc(r.id)}" class="${m.length&&!r.arquivado?'haspend':''}${r.arquivado?' archived':''}${grupo?' grupo':''}${conta?' conta':''}">`+vc.map(c=>{
       const txt=fmt(c,r);
       if(c.key==='cliente'){
-        return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa"><span class="nm">${txt?esc(txt):'sem nome'}</span>${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span></div></td>`;
+        const podeSel=!ASSIST()&&!grupo&&!conta&&!r.arquivado;
+        const caixa=podeSel?`<input type="checkbox" class="selbox" data-sel${selecionados.has(r.id)?' checked':''} aria-label="Selecionar ${esc(txt||'cliente')} para agrupar" title="Selecionar para agrupar">`:'';
+        const nC=grupo?contasDe(r).length:0;
+        const actsGrupo=`<span class="acts"><button class="act" data-act="desagrupar" title="Desagrupar" aria-label="Desagrupar ${esc(txt)}">${ICON_DESAGRUPAR}</button></span>`;
+        return `<td class="sticky namecell${isEmpty(r.cliente)?' miss':''}" data-k="cliente"><div class="c" title="Abrir ficha completa">${caixa}<span class="nm">${txt?esc(txt):'sem nome'}</span>${grupo?`<span class="gbadge">${nC} conta${nC===1?'':'s'}</span>`:''}${m.length&&!r.arquivado?`<span class="badge" title="${esc(m.map(x=>x.label).join(', '))}">${m.length} faltando</span>`:''}${grupo?actsGrupo:`<span class="acts">${r.arquivado?`<button class="act" data-act="arch" title="Desarquivar" aria-label="Desarquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></button>`:`<button class="act" data-act="arch" title="Arquivar" aria-label="Arquivar ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>`}<button class="act del" data-act="del" title="Excluir" aria-label="Excluir ${esc(txt)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></span>`}</div></td>`;
       }
       if(naoSeAplica(c,r)) return `<td class="na ${c.type}" data-k="${c.key}"><div class="c"></div></td>`;
+      if(c.type==='tipo'&&!ASSIST()&&grupo) return `<td class="tipo sticky" data-k="tipo"><div class="c"><span class="tipobtn tiinfo" tabindex="0" data-tip="<strong>Grupo</strong>Uma mensalidade só para ${contasDe(r).length} conta(s). Valor, adicionais e total ficam nesta linha.">${ICON_GRUPO}</span></div></td>`;
+      if(c.type==='tipo'&&!ASSIST()&&conta) return `<td class="tipo sticky" data-k="tipo"><div class="c"><span class="tipobtn tiinfo conta" tabindex="0" data-tip="<strong>Conta do grupo</strong>Paga por ${esc(grupoDe(r).cliente||'')}. Os valores ficam na linha do grupo.">${ICON_CONTA}</span></div></td>`;
       if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
       if(c.type==='tipo'){const k=tipoChave(r.tipo);return `<td class="tipo sticky" data-k="${c.key}"><div class="c"><button type="button" class="tipobtn${k?' livre':''}" data-tipomenu data-tip="<strong>${esc(tipoLabel(k))}</strong>${esc(TIPO_INFO[k].desc)} Clique para trocar." aria-label="Tipo: ${esc(tipoLabel(k))}. Clique para trocar.">${TIPO_INFO[k].icone}</button></div></td>`}
       if(c.type==='tipo_antigo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
@@ -618,7 +695,7 @@ function render(){
   }).join('');
   $('#tfoot').innerHTML=vc.map(c=>{
     if(c.key==='tipo') return '<td class="sticky" data-k="tipo"><div class="c"></div></td>';
-    if(c.key==='cliente') return `<td class="sticky" data-k="cliente"><div class="c">Total · ${list.length} cliente${list.length>1?'s':''}</div></td>`;
+    if(c.key==='cliente'){const n=list.filter(r=>!ehConta(r)).length;return `<td class="sticky" data-k="cliente"><div class="c">Total · ${n} cliente${n>1?'s':''}</div></td>`}
     if((c.type!=='money'&&c.type!=='calc')||ASSIST()) return '<td><div class="c"></div></td>';
     const vals=list.filter(r=>!naoSeAplica(c,r)).map(r=>c.type==='calc'?CALC[c.key](r):r[c.key]).filter(isNum);
     return `<td class="money"><div class="c">${vals.length?brl.format(vals.reduce((a,b)=>a+b,0)):''}</div></td>`;
@@ -630,9 +707,10 @@ const ICON_ARCH='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" w
 async function rowAction(btn,id){
   if(!canWrite){toast('Você só tem acesso de leitura.');return}
   const r=rows.find(x=>x.id===id); if(!r) return;
+  if(btn.dataset.act==='desagrupar'){abrirDesagrupar(id);return}
   if(btn.dataset.act==='arch'){
-    const to=!r.arquivado;
-    try{await writeDoc(id,{arquivado:to},'update');toast(to?`${r.cliente} arquivado`:`${r.cliente} voltou para a tabela`)}catch(e){handleWriteErr(e)}
+    const to=!r.arquivado, antes=copia(r);
+    try{await writeDoc(id,{arquivado:to},'update');oferecerDesfazer(to?`${r.cliente} arquivado`:`${r.cliente} voltou para a tabela`,[{id,antes}])}catch(e){handleWriteErr(e)}
     return;
   }
   if(btn.dataset.armed!=='1'){
@@ -641,11 +719,14 @@ async function rowAction(btn,id){
     return;
   }
   editing=null;
-  try{await writeDoc(id,null,'delete');toast(`${r.cliente} excluído`)}catch(e){handleWriteErr(e)}
+  const antes=copia(r);
+  try{await writeDoc(id,null,'delete');oferecerDesfazer(`${r.cliente} excluído`,[{id,antes}])}catch(e){handleWriteErr(e)}
   render();
 }
 /* ---------- inline edit ---------- */
 $('#tbody').addEventListener('click',e=>{
+  const sb=e.target.closest('[data-sel]');
+  if(sb){e.stopPropagation();const id=sb.closest('tr').dataset.id;if(sb.checked)selecionados.add(id);else selecionados.delete(id);renderSelBar();return}
   const nfb=e.target.closest('[data-nfmenu]');
   if(nfb){e.stopPropagation();abrirMenuNF(nfb,nfb.closest('tr').dataset.id);return}
   const tpb=e.target.closest('[data-tipomenu]');
@@ -685,7 +766,7 @@ function abrirMenuNF(btn,id){
   document.body.appendChild(m);
   const b=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
   m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+'px';
-  m.querySelector('button').onclick=()=>{fecharMenuIsento();setCampo(id,'valorNF',null).then(()=>toast('Nota fiscal: não tem'))};
+  m.querySelector('button').onclick=()=>{fecharMenuIsento();setCampo(id,'valorNF',null,'Nota fiscal: não tem')};
   m.querySelector('button').focus();
   m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}});
   setTimeout(()=>{document.addEventListener('mousedown',foraMenuIsento,true);addEventListener('scroll',fecharMenuIsento,true)},0);
@@ -699,7 +780,7 @@ function abrirMenuTipo(btn,id){
   document.body.appendChild(m);
   const b=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
   m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.left,innerWidth-w-8))+'px';
-  m.querySelectorAll('button').forEach(o=>o.onclick=()=>{fecharMenuIsento();const v=o.dataset.v||null;if((v||'')!==atual)setCampo(id,'tipo',v)});
+  m.querySelectorAll('button').forEach(o=>o.onclick=()=>{fecharMenuIsento();const v=o.dataset.v||null;if((v||'')!==atual)setCampo(id,'tipo',v,`${r.cliente}: ${tipoLabel(v)}`)});
   (m.querySelector('.atual')||m.querySelector('button')).focus();
   m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}
     if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const bs=[...m.querySelectorAll('button')],i=bs.indexOf(document.activeElement);bs[(i+(e.key==='ArrowDown'?1:bs.length-1))%bs.length].focus()}});
@@ -715,35 +796,36 @@ function abrirMenuIsento(btn,id,key){
   m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+'px';
   m.querySelector('button').onclick=()=>{fecharMenuIsento();
     const to=jaIsento?null:ISENTO, msg=jaIsento?'Campo voltou para preencher':'Marcado como isento';
-    if(key==='publicacoes'){const r=rows.find(x=>x.id===id);if(!r)return;const novo={publicacoes:to,pubPlano:null};Object.assign(r,novo);render();writeDoc(id,novo,'update').then(()=>toast(msg)).catch(handleWriteErr);return}
-    setCampo(id,key,to).then(()=>toast(msg))};
+    if(key==='publicacoes'){const r=rows.find(x=>x.id===id);if(!r)return;const antes=copia(r),novo={publicacoes:to,pubPlano:null};Object.assign(r,novo);render();writeDoc(id,novo,'update').then(()=>oferecerDesfazer(msg,[{id,antes}])).catch(handleWriteErr);return}
+    setCampo(id,key,to,msg)};
   m.querySelector('button').focus();
   m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}});
   setTimeout(()=>{document.addEventListener('mousedown',foraMenuIsento,true);addEventListener('scroll',fecharMenuIsento,true)},0);
 }
-async function setCampo(id,key,to){
+async function setCampo(id,key,to,msg){
   if(!canWrite){toast('Você só tem acesso de leitura.');render();return}
   const r=rows.find(x=>x.id===id); if(!r) return;
-  const prev=r[key]; r[key]=to; render();
-  try{await writeDoc(id,{[key]:to},'update')}catch(e){r[key]=prev;render();handleWriteErr(e)}
+  const antes=copia(r), prev=r[key]; r[key]=to; render();
+  try{await writeDoc(id,{[key]:to},'update');oferecerDesfazer(msg||'Salvo',[{id,antes}])}catch(e){r[key]=prev;render();handleWriteErr(e)}
 }
 async function setOk(id,col,to){
   if(!canWrite){toast('Você só tem acesso de leitura.');render();return}
   const r=rows.find(x=>x.id===id); if(!r) return;
-  const prev=r[col.key];
+  const antes=copia(r), prev=r[col.key];
   r[col.key]=to; render();
-  try{await writeDoc(id,{[col.key]:to},'update')}catch(e){r[col.key]=prev;render();handleWriteErr(e)}
+  try{await writeDoc(id,{[col.key]:to},'update');oferecerDesfazer(to?`${r.cliente}: boleto OK`:`${r.cliente}: boleto não enviado`,[{id,antes}])}catch(e){r[col.key]=prev;render();handleWriteErr(e)}
 }
 $('#resetOkBtn').addEventListener('click',async()=>{
   const b=$('#resetOkBtn');
   if(!canWrite){toast('Você só tem acesso de leitura.');return}
-  const alvo=rows.filter(r=>!r.arquivado&&isOk(r.status));
+  const alvo=rows.filter(r=>!r.arquivado&&!ehConta(r)&&isOk(r.status));
   if(!alvo.length){toast('Nenhum OK marcado.');return}
   if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent=`Desmarcar ${alvo.length} OK${alvo.length>1?'s':''}?`;b.classList.add('armed');
     setTimeout(()=>{b.dataset.armed='';b.textContent='Desmarcar OKs';b.classList.remove('armed')},4000);return}
   b.dataset.armed='';b.textContent='Desmarcar OKs';b.classList.remove('armed');
+  const antes=alvo.map(r=>({id:r.id,antes:copia(r)}));
   alvo.forEach(r=>r.status=null); render(); b.disabled=true;
-  try{await writeMany(alvo.map(r=>[r.id,{status:null}]),(n,t)=>{b.textContent=`Desmarcando ${n}/${t}…`});b.disabled=false;b.textContent='Desmarcar OKs';toast(`${alvo.length} OK${alvo.length>1?'s':''} desmarcado${alvo.length>1?'s':''}. Todos como não enviado.`)}
+  try{await writeMany(alvo.map(r=>[r.id,{status:null}]),(n,t)=>{b.textContent=`Desmarcando ${n}/${t}…`});b.disabled=false;b.textContent='Desmarcar OKs';oferecerDesfazer(`${alvo.length} OK${alvo.length>1?'s':''} desmarcado${alvo.length>1?'s':''}`,antes)}
   catch(e){b.disabled=false;b.textContent='Desmarcar OKs';handleWriteErr(e)}
 });
 function startEdit(td,id,col){
@@ -797,8 +879,9 @@ async function commit(id,col,raw){
   if(nv&&nv.err){toast(`“${raw}” não é um valor válido. Use algo como 1.380,00.`);return}
   const ov=isEmpty(r[col.key])?null:r[col.key];
   if(ov===nv) return;
+  const antes=copia(r);
   r[col.key]=nv; // otimista
-  try{await writeDoc(id,{[col.key]:nv},'update');toast('Salvo')}
+  try{await writeDoc(id,{[col.key]:nv},'update');oferecerDesfazer(`${col.label} salvo`,[{id,antes}])}
   catch(e){handleWriteErr(e)}
 }
 
@@ -883,7 +966,9 @@ $('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'ativos':'pend');
 function emailText(r,items){
   const plano=!semCobranca(r)&&isNum(r.valorMensal)?r.valorMensal:0;
   const sum=items.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
-  const L=[`Resumo da cobrança · ${mesLabel(refMes)}`,'',`Plano mensal: ${brl.format(plano)}`];
+  const L=[`Resumo da cobrança · ${mesLabel(refMes)}`,''];
+  if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`,'')}
+  L.push(`Plano mensal: ${brl.format(plano)}`);
   if(items.length){L.push('','Adicionais do mês:');items.forEach(i=>L.push(`• ${i.desc||'Item'}: ${brl.format(isNum(i.valor)?i.valor:0)}`));L.push(`Total de adicionais: ${brl.format(sum)}`)}
   L.push('',`Total do mês: ${brl.format(plano+sum)}`);
   return L.join('\n');
@@ -893,6 +978,16 @@ function openItems(id){
   if(ASSIST()) return openItemsAssist(r);
   let items=itemsOf(r).map(i=>({...i}));
   if(!items.length) items=[{id:randHex(6),mes:refMes,desc:'',valor:null}];
+  // histórico do painel: cada edição de campo, item removido ou incluído pode ser desfeito (botão ou Ctrl+Z)
+  const hist=[]; let antesFoco=null, syncAtual=()=>{}, redes=false;
+  const estado=()=>JSON.stringify(items);
+  const desfazerItens=()=>{
+    syncAtual(); const atual=estado();
+    if(antesFoco!==null&&atual!==antesFoco){items=JSON.parse(antesFoco);antesFoco=null}
+    else if(hist.length){items=JSON.parse(hist.pop());antesFoco=null}
+    else{toast('Nada para desfazer');return}
+    draw(); toast('Desfeito');
+  };
   const draw=()=>{
     const body=`<div class="sec">${esc(mesLabel(refMes))}</div>
       <div class="ithead"><span>O que foi feito</span><span style="text-align:right">Valor final</span><span></span></div>
@@ -901,19 +996,23 @@ function openItems(id){
       <div class="itsum" id="itSum"></div>
       <div class="sec">Texto para o e-mail do boleto</div>
       <textarea class="emailbox" id="itMail" readonly></textarea>`;
-    shell(`Adicionais · ${r.cliente||''}`,body,`<button class="btn" id="itCopy" type="button">Copiar para o e-mail</button><div style="display:flex;gap:8px"><button class="btn" id="itCancel" type="button">Cancelar</button><button class="btn primary" id="itSave" type="button">Salvar</button></div>`);
+    redes=true; shell(`Adicionais · ${r.cliente||''}`,body,`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="itUndo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button class="btn" id="itCopy" type="button">Copiar para o e-mail</button></div><div style="display:flex;gap:8px"><button class="btn" id="itCancel" type="button">Cancelar</button><button class="btn primary" id="itSave" type="button">Salvar</button></div>`);
+    redes=false; drawerUndo=desfazerItens; $('#itUndo').onclick=desfazerItens;
     const sync=()=>{
-      document.querySelectorAll('.itrow').forEach(row=>{const n=+row.dataset.n;items[n].desc=row.querySelector('.d').value.trim();const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
+      document.querySelectorAll('.itrow').forEach(row=>{const n=+row.dataset.n;if(!items[n])return;items[n].desc=row.querySelector('.d').value.trim();const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
       const clean=items.filter(i=>i.desc||isNum(i.valor));
       const plano=!semCobranca(r)&&isNum(r.valorMensal)?r.valorMensal:0, sum=clean.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
       $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length})</span><span>${brl.format(sum)}</span></div><div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
       $('#itMail').value=emailText(r,clean);
       return clean;
     };
-    sync();
-    document.querySelector('.itlist').addEventListener('input',sync);
-    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();items.splice(+b.dataset.rm,1);if(!items.length)items.push({id:randHex(6),mes:refMes,desc:'',valor:null});draw()});
-    $('#itAdd').onclick=()=>{sync();items.push({id:randHex(6),mes:refMes,desc:'',valor:null});draw();document.getElementById('it-d-'+(items.length-1))?.focus()};
+    sync(); syncAtual=sync;
+    const lista=document.querySelector('.itlist');
+    lista.addEventListener('input',sync);
+    lista.addEventListener('focusin',()=>{if(redes)return;sync();antesFoco=estado()});
+    lista.addEventListener('focusout',()=>{if(redes)return;sync();if(antesFoco!==null&&estado()!==antesFoco)hist.push(antesFoco);antesFoco=null});
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();hist.push(estado());items.splice(+b.dataset.rm,1);if(!items.length)items.push({id:randHex(6),mes:refMes,desc:'',valor:null});draw()});
+    $('#itAdd').onclick=()=>{sync();hist.push(estado());items.push({id:randHex(6),mes:refMes,desc:'',valor:null});draw();document.getElementById('it-d-'+(items.length-1))?.focus()};
     $('#itCancel').onclick=closeDrawer;
     $('#itCopy').onclick=()=>{const t=$('#itMail').value;
       const fb=()=>{const el=$('#itMail');el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
@@ -924,7 +1023,8 @@ function openItems(id){
       const clean=sync().map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:isNum(i.valor)?i.valor:0}));
       const others=(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).filter(i=>i&&i.mes!==refMes);
       $('#itSave').disabled=true;
-      try{await writeDoc(id,{adicionaisItens:others.concat(clean)},'update');toast('Adicionais salvos');closeDrawer()}
+      const antes=copia(r);
+      try{await writeDoc(id,{adicionaisItens:others.concat(clean)},'update');oferecerDesfazer('Adicionais salvos',[{id,antes}]);closeDrawer()}
       catch(e){$('#itSave').disabled=false;handleWriteErr(e)}
     };
   };
@@ -934,22 +1034,37 @@ function openItems(id){
 function openItemsAssist(r){
   let items=itemsOf(r).map(i=>({id:i.id,mes:i.mes,desc:i.desc}));
   if(!items.length) items=[{id:'',mes:refMes,desc:''}];
+  const hist=[]; let antesFoco=null, syncAtual=()=>{}, redes=false;
+  const estado=()=>JSON.stringify(items);
+  const desfazerItens=()=>{
+    syncAtual(); const atual=estado();
+    if(antesFoco!==null&&atual!==antesFoco){items=JSON.parse(antesFoco);antesFoco=null}
+    else if(hist.length){items=JSON.parse(hist.pop());antesFoco=null}
+    else{toast('Nada para desfazer');return}
+    draw(); toast('Desfeito');
+  };
   const draw=()=>{
-    shell(`Adicionais · ${r.cliente||''}`,`<div class="sec">${esc(mesLabel(refMes))}</div>
+    redes=true; shell(`Adicionais · ${r.cliente||''}`,`<div class="sec">${esc(mesLabel(refMes))}</div>
       <p class="sub" style="margin:0 0 4px;font-size:13px">Descreva o que foi feito. O valor é definido pela dona depois.</p>
       <div class="itlist">${items.map((i,n)=>`<div class="itrow" data-n="${n}" style="grid-template-columns:1fr auto"><input class="d" placeholder="Ex.: Folder, vídeo extra, dronagem" value="${esc(i.desc||'')}" aria-label="Descrição do item ${n+1}"><button class="iconbtn" type="button" data-rm="${n}" aria-label="Remover item ${n+1}">×</button></div>`).join('')}</div>
       <div><button class="btn" type="button" id="itAdd">+ Adicionar item</button></div>`,
-      `<span></span><div style="display:flex;gap:8px"><button class="btn" id="itCancel" type="button">Cancelar</button><button class="btn primary" id="itSave" type="button">Salvar</button></div>`);
-    const sync=()=>document.querySelectorAll('.itrow').forEach(row=>{items[+row.dataset.n].desc=row.querySelector('.d').value.trim()});
-    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();items.splice(+b.dataset.rm,1);if(!items.length)items.push({id:'',mes:refMes,desc:''});draw()});
-    $('#itAdd').onclick=()=>{sync();items.push({id:'',mes:refMes,desc:''});draw();document.querySelectorAll('.itrow .d')[items.length-1]?.focus()};
+      `<button class="btn" id="itUndo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><div style="display:flex;gap:8px"><button class="btn" id="itCancel" type="button">Cancelar</button><button class="btn primary" id="itSave" type="button">Salvar</button></div>`);
+    redes=false; drawerUndo=desfazerItens; $('#itUndo').onclick=desfazerItens;
+    const sync=()=>document.querySelectorAll('.itrow').forEach(row=>{if(!items[+row.dataset.n])return;items[+row.dataset.n].desc=row.querySelector('.d').value.trim()});
+    syncAtual=sync;
+    const lista=document.querySelector('.itlist');
+    lista.addEventListener('focusin',()=>{if(redes)return;sync();antesFoco=estado()});
+    lista.addEventListener('focusout',()=>{if(redes)return;sync();if(antesFoco!==null&&estado()!==antesFoco)hist.push(antesFoco);antesFoco=null});
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();hist.push(estado());items.splice(+b.dataset.rm,1);if(!items.length)items.push({id:'',mes:refMes,desc:''});draw()});
+    $('#itAdd').onclick=()=>{sync();hist.push(estado());items.push({id:'',mes:refMes,desc:''});draw();document.querySelectorAll('.itrow .d')[items.length-1]?.focus()};
     $('#itCancel').onclick=closeDrawer;
     $('#itSave').onclick=async()=>{
       sync();
       const deste=items.filter(i=>i.desc).map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc}));
       const outros=(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).filter(i=>i&&i.mes!==refMes).map(i=>({id:i.id,mes:i.mes,desc:i.desc}));
       $('#itSave').disabled=true;
-      try{await writeDoc(r.id,{adicionaisItens:outros.concat(deste)},'update');toast('Adicionais salvos. A dona coloca o valor.');closeDrawer()}
+      const antes=copia(r);
+      try{await writeDoc(r.id,{adicionaisItens:outros.concat(deste)},'update');oferecerDesfazer('Adicionais salvos. A dona coloca o valor.',[{id:r.id,antes}]);closeDrawer()}
       catch(e){$('#itSave').disabled=false;handleWriteErr(e)}
     };
   };
@@ -1035,11 +1150,92 @@ function openPub(id){
       const vazio=!plano.ilimitado&&!isNum(plano.total);
       const novo={pubPlano:vazio?null:JSON.stringify(plano),publicacoes:vazio?null:pubTexto(plano)};
       $('#pubSave').disabled=true;
-      try{Object.assign(r,novo);render();await writeDoc(id,novo,'update');toast('Publicações salvas');closeDrawer()}
+      const antes=copia(r);
+      try{Object.assign(r,novo);render();await writeDoc(id,novo,'update');oferecerDesfazer('Publicações salvas',[{id,antes}]);closeDrawer()}
       catch(e){$('#pubSave').disabled=false;handleWriteErr(e)}
     };
   };
   draw();
+}
+/* ---------- agrupar e desagrupar ---------- */
+let selecionados=new Set();
+function renderSelBar(){
+  const bar=$('#selBar'); if(!bar) return;
+  for(const id of [...selecionados]){const r=rows.find(x=>x.id===id);if(!r||ehGrupo(r)||ehConta(r)||r.arquivado)selecionados.delete(id)}
+  const n=selecionados.size;
+  if(ASSIST()||!n){bar.hidden=true;bar.innerHTML='';return}
+  bar.hidden=false;
+  bar.innerHTML=`<span><strong>${n}</strong> selecionado${n>1?'s':''}</span><button class="btn primary" type="button" id="selAgrupar">Agrupar</button><button class="btn" type="button" id="selLimpar">Limpar seleção</button>`;
+  $('#selAgrupar').onclick=abrirAgrupar; $('#selLimpar').onclick=()=>{selecionados.clear();render()};
+}
+const moedaTxt=v=>isNum(v)?v.toFixed(2).replace('.',','):'';
+function maisComum(vals){const c={};vals.forEach(v=>{if(!isEmpty(v)&&!ehIsento(v)){const k=String(v).trim();c[k]=(c[k]||0)+1}});return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||''}
+function abrirAgrupar(){
+  if(!canWrite){toast('Você só tem acesso de leitura.');return}
+  const contas=[...selecionados].map(id=>rows.find(r=>r.id===id)).filter(r=>r&&!ehGrupo(r)&&!ehConta(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||''));
+  if(contas.length<2){toast('Selecione pelo menos 2 clientes para agrupar.');return}
+  const soma=contas.reduce((s,r)=>s+(isNum(r.valorMensal)?r.valorMensal:0),0);
+  const nItens=contas.reduce((s,r)=>s+(Array.isArray(r.adicionaisItens)?r.adicionaisItens.length:0),0);
+  const contato=(contas.find(r=>!isEmpty(r.contato)&&!ehIsento(r.contato))||{}).contato||'';
+  shell('Agrupar clientes',`
+    <p class="sub" style="margin:0;font-size:13px">O grupo vira uma linha com um só valor do plano, adicionais e total. As contas ficam logo abaixo dela, só com os dados de cadastro.</p>
+    <div class="imp">${contas.map(r=>`<div class="imp-row"><span class="nm">${esc(r.cliente||'sem nome')}</span><span class="tag">${isNum(r.valorMensal)?brl.format(r.valorMensal):'sem valor'}</span></div>`).join('')}
+      <div class="imp-row soma"><span class="nm">Soma das contas</span><span class="tag">${brl.format(soma)}</span></div></div>
+    <div class="field"><label for="gNome">Nome do grupo (quem paga)</label><input id="gNome" autocomplete="off" placeholder="Ex.: Grupo R. Selau"></div>
+    <div class="field"><label for="gValor">Valor do plano do grupo</label><input id="gValor" inputmode="decimal" value="${moedaTxt(soma)}" placeholder="0,00"></div>
+    <div class="field"><label for="gDia">Dia de envio do boleto</label><input id="gDia" value="${esc(maisComum(contas.map(r=>r.diaEnvio)))}" placeholder="Ex.: 10"></div>
+    <div class="field"><label for="gContato">Contato p/ boleto</label><input id="gContato" value="${esc(contato)}"></div>
+    ${nItens?`<p class="sub" style="margin:0;font-size:12px">${nItens} adicional(is) que estavam nas contas passam para o grupo, com o nome da conta na frente. Ao desagrupar, cada um volta para a sua conta.</p>`:''}`,
+    `<span></span><div style="display:flex;gap:8px"><button class="btn" id="gCancel" type="button">Cancelar</button><button class="btn primary" id="gSave" type="button">Agrupar ${contas.length} contas</button></div>`);
+  $('#gNome').focus();
+  $('#gCancel').onclick=closeDrawer;
+  $('#gSave').onclick=async()=>{
+    const nome=$('#gNome').value.trim().replace(/\s+/g,' ');
+    if(!nome){toast('Dê um nome ao grupo.');$('#gNome').focus();return}
+    const v=parseMoney($('#gValor').value);
+    if(v!==null&&isNaN(v)){toast('Valor do plano inválido. Use algo como 1.380,00.');$('#gValor').focus();return}
+    const gid=db.collection('clientes').doc().id;
+    const antes=contas.map(r=>({id:r.id,antes:copia(r)}));
+    const itensGrupo=[];
+    contas.forEach(r=>(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).forEach(i=>itensGrupo.push({...i,desc:`${r.cliente}: ${i.desc||''}`.trim()})));
+    const grupo={cliente:nome.toUpperCase(),tipo:'grupo',valorMensal:v,diaEnvio:$('#gDia').value.trim()||null,contato:$('#gContato').value.trim()||null,adicionaisItens:itensGrupo};
+    $('#gSave').disabled=true;
+    rows.push({id:gid,...copia(grupo)}); contas.forEach(r=>{r.grupoId=gid;r.adicionaisItens=[]});
+    selecionados.clear(); closeDrawer(); render();
+    try{
+      await writeMany([[gid,grupo,'set'],...contas.map(r=>[r.id,{grupoId:gid,adicionaisItens:[]}])]);
+      oferecerDesfazer(`Grupo ${grupo.cliente} criado com ${contas.length} contas`,[{id:gid,antes:null},...antes]);
+    }catch(e){handleWriteErr(e)}
+  };
+}
+function abrirDesagrupar(gid){
+  if(!canWrite){toast('Você só tem acesso de leitura.');return}
+  const g=rows.find(x=>x.id===gid); if(!ehGrupo(g)) return;
+  const contas=contasDe(g);
+  const itens=Array.isArray(g.adicionaisItens)?g.adicionaisItens:[];
+  const dono=i=>contas.find(c=>c.cliente&&String(i.desc||'').startsWith(`${c.cliente}: `));
+  const voltam=itens.filter(dono), soltos=itens.filter(i=>!dono(i));
+  shell(`Desagrupar ${g.cliente||'grupo'}`,`
+    <p class="sub" style="margin:0;font-size:13px">As contas voltam a ser clientes normais, cada uma com o valor do plano que tinha antes de agrupar. A linha do grupo é apagada.</p>
+    <div class="imp">${contas.map(c=>`<div class="imp-row"><span class="nm">${esc(c.cliente||'sem nome')}</span><span class="tag">${isNum(c.valorMensal)?brl.format(c.valorMensal):'sem valor'}</span></div>`).join('')||'<div class="sub">Este grupo não tem contas.</div>'}</div>
+    ${voltam.length?`<p class="sub" style="margin:0;font-size:12px">${voltam.length} adicional(is) voltam para a conta de origem.</p>`:''}
+    ${soltos.length&&contas.length?`<div class="field"><label for="dgPara">${soltos.length} adicional(is) lançado(s) no grupo vão para</label><select id="dgPara">${contas.map(c=>`<option value="${esc(c.id)}">${esc(c.cliente||'sem nome')}</option>`).join('')}</select></div>`:''}`,
+    `<span></span><div style="display:flex;gap:8px"><button class="btn" id="dgCancel" type="button">Cancelar</button><button class="btn primary" id="dgSave" type="button">Desagrupar</button></div>`);
+  $('#dgCancel').onclick=closeDrawer;
+  $('#dgSave').onclick=async()=>{
+    const para=$('#dgPara')?.value||null;
+    const antes=[{id:g.id,antes:copia(g)},...contas.map(c=>({id:c.id,antes:copia(c)}))];
+    const novos=new Map(contas.map(c=>[c.id,(Array.isArray(c.adicionaisItens)?c.adicionaisItens:[]).slice()]));
+    itens.forEach(i=>{const d=dono(i);if(d)novos.get(d.id).push({...i,desc:String(i.desc).slice(d.cliente.length+2)});else if(para)novos.get(para).push({...i})});
+    $('#dgSave').disabled=true;
+    const ix=rows.indexOf(g); if(ix>=0) rows.splice(ix,1);
+    contas.forEach(c=>{c.grupoId=null;c.adicionaisItens=novos.get(c.id)});
+    closeDrawer(); render();
+    try{
+      await writeMany([...contas.map(c=>[c.id,{grupoId:null,adicionaisItens:novos.get(c.id)}]),[g.id,null,'delete']]);
+      oferecerDesfazer(`${g.cliente} desagrupado`,antes);
+    }catch(e){handleWriteErr(e)}
+  };
 }
 /* ---------- acessos (só a dona) ---------- */
 function openAcessos(){
@@ -1087,17 +1283,18 @@ $('#colbar').addEventListener('click',e=>{
   if(a){const all=a.dataset.all==='1';cols.forEach(c=>{if(!c.locked)c.visible=all?true:!DEFAULT_COLS.find(d=>d.key===c.key)?.off});saveCols();render()}
 });
 /* ---------- dashboard ---------- */
-const tm=r=>semCobranca(r)?CALC.adicionais(r):CALC.totalMes(r); // não pagante: só os adicionais do mês entram
+const tm=r=>ehConta(r)?null:semCobranca(r)?CALC.adicionais(r):CALC.totalMes(r); // não pagante: só os adicionais do mês entram
 const brlC=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1});
 const numC=new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1});
 const pct=n=>Math.round(n*100)+'%';
 function renderDash(act,nArq){
   if(!loaded&&!rows.length) return;
-  const tot=act.reduce((s,r)=>s+(isNum(tm(r))?tm(r):0),0);
-  const withVal=act.filter(r=>isNum(tm(r)));
+  const unid=act.filter(r=>!ehConta(r)), nContas=act.length-unid.length; // grupo conta uma vez só
+  const tot=unid.reduce((s,r)=>s+(isNum(tm(r))?tm(r):0),0);
+  const withVal=unid.filter(r=>isNum(tm(r)));
   const pend=act.filter(r=>missing(r).length);
-  const div=act.filter(r=>(CALC.adicionais(r)||0)>0);
-  $('#sClientesSub').textContent=nArq?`${nArq} arquivado${nArq>1?'s':''}`:'nenhum arquivado';
+  const div=unid.filter(r=>(CALC.adicionais(r)||0)>0);
+  $('#sClientesSub').textContent=[nArq?`${nArq} arquivado${nArq>1?'s':''}`:'nenhum arquivado',nContas?`${nContas} conta${nContas>1?'s':''} em grupos`:''].filter(Boolean).join(' · ');
   $('#sTicket').textContent=withVal.length?`ticket médio ${brl.format(tot/withVal.length)}`:'sem valores cadastrados';
   const done=act.length?(act.length-pend.length)/act.length:1;
   $('#sMeter').style.width=pct(done);
@@ -1210,10 +1407,11 @@ $('#csvBtn').onclick=async()=>{
 };
 
 /* ---------- drawer ---------- */
-function closeDrawer(){$('#drawerRoot').innerHTML='';if(pendingRender)render()}
+function closeDrawer(){$('#drawerRoot').innerHTML='';drawerUndo=null;if(pendingRender)render()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#drawerRoot').firstChild&&!editing)closeDrawer()});
 function shell(title,body,foot){
   const mesmo=$('#drawerRoot .drawer')?.getAttribute('aria-label')===title; // redesenho do mesmo painel: sem animar de novo
+  if(!mesmo) drawerUndo=null;
   $('#drawerRoot').innerHTML=`<div class="scrim" id="scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="dhead"><h2>${esc(title)}</h2><button class="x" id="dx" aria-label="Fechar">×</button></div><div class="dbody">${body}</div><div class="dfoot">${foot}</div></aside>`;
   if(mesmo) $('#drawerRoot .drawer').classList.add('noanim');
   $('#scrim').onclick=closeDrawer; $('#dx').onclick=closeDrawer;
@@ -1223,7 +1421,9 @@ function openClient(id){
   if(id&&!r) return;
   SUGGEST.forEach(ensureDatalist);
   if(!document.getElementById('dl-isento')){const d=document.createElement('datalist');d.id='dl-isento';d.innerHTML=`<option value="${ISENTO}">`;document.body.appendChild(d)}
-  const body=cols.filter(podeVer).filter(c=>!(id&&semCobranca(r)&&!ATIVOS_SEM_COB.includes(c.key))).map(c=>{
+  const body=cols.filter(podeVer).filter(c=>!(id&&naoSeAplica(c,r))).map(c=>{
+    if(c.type==='tipo'&&id&&ehGrupo(r)) return `<div class="field"><label>Grupo</label><div class="calcv">${contasDe(r).length} conta(s): ${esc(contasDe(r).map(x=>x.cliente).join(', ')||'nenhuma')}</div></div>`;
+    if(c.type==='tipo'&&id&&ehConta(r)) return `<div class="field"><label>Grupo</label><div class="calcv">Conta do grupo ${esc(grupoDe(r).cliente||'')}</div></div>`;
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
     if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
@@ -1238,7 +1438,7 @@ function openClient(id){
       :`<input id="f-${c.key}" name="${c.key}" value="${esc(val)}"${c.key==='valorNF'?'':list}${c.type==='money'?` inputmode="decimal" placeholder="${c.key==='valorNF'?'Não (sem nota)':'0,00'}"`:''}${ASSIST()&&(id||c.key!=='cliente')?' disabled':''}>`;
     return `<div class="field${miss?' miss':''}"><label for="f-${c.key}">${esc(c.label)}${c.required?'<span class="req" style="color:var(--warn)">•</span>':''}${miss?'<span class="hint">falta preencher</span>':''}</label>${input}</div>`;
   }).join('');
-  const foot=(id?`<button class="btn danger" id="delBtn" type="button">Excluir cliente</button>`:'<span></span>')+`<div style="display:flex;gap:8px"><button class="btn" id="cancelBtn" type="button">Cancelar</button><button class="btn primary" id="saveBtn" type="button">${id?'Salvar alterações':'Adicionar cliente'}</button></div>`;
+  const foot=(id&&!ehGrupo(r)?`<button class="btn danger" id="delBtn" type="button">Excluir cliente</button>`:'<span></span>')+`<div style="display:flex;gap:8px"><button class="btn" id="cancelBtn" type="button">Cancelar</button><button class="btn primary" id="saveBtn" type="button">${id?'Salvar alterações':'Adicionar cliente'}</button></div>`;
   shell(id?(r.cliente||'Cliente'):'Novo cliente',body,foot);
   $('#cancelBtn').onclick=closeDrawer;
   if($('#goItems')) $('#goItems').onclick=()=>openItems(id);
@@ -1254,15 +1454,16 @@ function openClient(id){
     if(isEmpty(data.cliente)){toast('Dê um nome ao cliente.');$('#f-cliente').focus();return}
     $('#saveBtn').disabled=true;
     try{
-      if(id){await writeDoc(id,data,'update');toast('Alterações salvas')}
-      else{const nid=db.collection('clientes').doc().id;await writeDoc(nid,data,'set');toast('Cliente adicionado')}
+      if(id){const antes=copia(r);await writeDoc(id,data,'update');oferecerDesfazer('Alterações salvas',[{id,antes}])}
+      else{const nid=db.collection('clientes').doc().id;await writeDoc(nid,data,'set');oferecerDesfazer('Cliente adicionado',[{id:nid,antes:null}])}
       closeDrawer();
     }catch(e){$('#saveBtn').disabled=false;handleWriteErr(e)}
   };
   const del=$('#delBtn');
   if(del){let armed=false;del.onclick=async()=>{
     if(!armed){armed=true;del.classList.add('armed');del.textContent='Clique de novo para excluir';setTimeout(()=>{if(del.isConnected){armed=false;del.classList.remove('armed');del.textContent='Excluir cliente'}},4000);return}
-    try{await writeDoc(id,null,'delete');toast('Cliente excluído');closeDrawer()}catch(e){handleWriteErr(e)}
+    const antes=copia(r);
+    try{await writeDoc(id,null,'delete');oferecerDesfazer('Cliente excluído',[{id,antes}]);closeDrawer()}catch(e){handleWriteErr(e)}
   }}
 }
 function openCols(){
