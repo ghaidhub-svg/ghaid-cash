@@ -1194,9 +1194,10 @@ function openPub(id){
      modo "valor": o total em duas partes (valor do 1º escolhido, o 2º é o resto);
      modo "adicionais": plano fixo num boleto e adicionais do mês em outro.
    As datas escolhidas valem no mês delas; nos outros meses vale o mesmo dia do mês. */
-const BOLETO_PADRAO={juros:'R$ 0,25 ao dia',multa:'1% ao mês'};
-const BOLETO_ANTIGO={juros:'0,25% ao mês',multa:'1,00% após o vencimento'};
-const cfgBoleto=()=>{const s=cfgFlags.boleto||{};const antigo=s.juros===BOLETO_ANTIGO.juros&&s.multa===BOLETO_ANTIGO.multa;return antigo?{...BOLETO_PADRAO}:{...BOLETO_PADRAO,...s}};
+const BOLETO_PADRAO={juros:'R$ 0,25 ao dia',multa:'1% após o vencimento, a cada mês de atraso'};
+// padrões de versões anteriores: se a configuração salva for igual a um deles, vale o padrão atual
+const BOLETO_ANTIGOS=[{juros:'0,25% ao mês',multa:'1,00% após o vencimento'},{juros:'R$ 0,25 ao dia',multa:'1% ao mês'}];
+const cfgBoleto=()=>{const s=cfgFlags.boleto||{};const antigo=BOLETO_ANTIGOS.some(a=>s.juros===a.juros&&s.multa===a.multa);return antigo?{...BOLETO_PADRAO}:{...BOLETO_PADRAO,...s}};
 const lerJSON=v=>{if(!v)return null;if(typeof v==='object')return v;try{return JSON.parse(v)}catch(e){return null}};
 const valido=v=>!isEmpty(v)&&!ehIsento(v);
 const dataBR=iso=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');return m?`${m[3]}/${m[2]}/${m[1]}`:null};
