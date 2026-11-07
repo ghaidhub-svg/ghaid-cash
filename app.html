@@ -61,7 +61,7 @@
 .lrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.45}
-.wrap{padding-left:max(clamp(20px,6vw,96px),env(safe-area-inset-left,0px));padding-right:max(clamp(20px,6vw,96px),env(safe-area-inset-right,0px));padding-block:clamp(28px,4vw,56px) 64px;display:flex;flex-direction:column;gap:24px;max-width:1520px;margin:0 auto}
+.wrap{padding-left:max(clamp(20px,6vw,96px),env(safe-area-inset-left,0px));padding-right:max(clamp(20px,6vw,96px),env(safe-area-inset-right,0px));padding-block:clamp(28px,4vw,56px) 64px;display:flex;flex-direction:column;gap:24px;max-width:1680px;margin:0 auto}
 header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:8px}
 h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:-.01em;margin:0;text-wrap:balance}
 .sub{color:var(--muted);font-size:13px;margin-top:2px}
@@ -304,6 +304,10 @@ td.items .c.empty{color:var(--muted);font-weight:500;font-size:12px}
 td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
 .itrow{display:grid;grid-template-columns:minmax(0,1fr) 120px 32px;gap:8px;align-items:center}
 .itrow input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0;width:100%}
+.itrow.c4,.ithead.c4{grid-template-columns:minmax(0,1fr) 104px auto 32px}
+.cort{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
+.cort input{width:16px;height:16px;margin:0;accent-color:var(--fg)}
+.itrow input.v:disabled{background:var(--surface-2);color:var(--muted);font-style:italic}
 .itrow input.v{text-align:right;font-variant-numeric:tabular-nums}
 .itlist{display:flex;flex-direction:column;gap:8px}
 .ithead{display:grid;grid-template-columns:minmax(0,1fr) 120px 32px;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
@@ -484,7 +488,7 @@ function mesLabel(m){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo
 function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1+d,1);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`}
 function itemsOf(r,m=refMes){return Array.isArray(r.adicionaisItens)?r.adicionaisItens.filter(i=>i&&i.mes===m):[]}
 const CALC={
-  adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0):null},
+  adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0):null},
   totalMes:r=>{const a=CALC.adicionais(r), pl=ehEsporadico(r)?null:r.valorMensal;return (isNum(pl)||a!=null)?(isNum(pl)?pl:0)+(a||0):null},
   diferenca:r=>{const t=CALC.totalMes(r);return (isNum(r.valorBoleto)&&t!=null)?r.valorBoleto-t:null},
   liquidoNF:r=>isNum(r.valorNF)?r.valorNF-(isNum(r.issRetido)?r.issRetido:0):null,
@@ -729,7 +733,7 @@ function render(){
       let extra='';
       if(c.type==='calc'){const v=CALC[c.key](r);if(c.key==='diferenca'&&v!=null&&Math.abs(v)>0.009)extra=v<0?' neg':' pos'}
       if(c.items&&ASSIST()){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc).join(' · ')||'Clique para lançar adicionais')}">${it.length?`${it.length} ${it.length>1?'itens':'item'}`:'+ adicionar'}</div></td>`}
-      if(c.items){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc+': '+brl.format(i.valor||0)).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}</span>`:'+ adicionar'}</div></td>`}
+      if(c.items){const it=itemsOf(r);return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}" title="${esc(it.map(i=>i.desc+': '+(i.cortesia?'cortesia':brl.format(i.valor||0))).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}</span>`:'+ adicionar'}</div></td>`}
       if(ehIsento(r[c.key])) extra+=' isento';
       return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(miss?'Falta preencher':txt)}">${miss?'?':esc(txt)}</div>${seta}</td>`;
     }).join('')+'</tr>';
@@ -1005,12 +1009,12 @@ $('#sPendBtn').onclick=()=>setFilter(filter==='pend'?'ativos':'pend');
 
 /* ---------- adicionais (itens) ---------- */
 function emailText(r,items){
-  const plano=!semCobranca(r)&&isNum(r.valorMensal)?r.valorMensal:0;
-  const sum=items.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
+  const plano=!semCobranca(r)&&!ehEsporadico(r)&&isNum(r.valorMensal)?r.valorMensal:0;
+  const sum=items.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
   const L=[`Resumo da cobrança · ${mesLabel(refMes)}`,''];
   if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`,'')}
   L.push(`Plano mensal: ${brl.format(plano)}`);
-  if(items.length){L.push('','Adicionais do mês:');items.forEach(i=>L.push(`• ${i.desc||'Item'}: ${brl.format(isNum(i.valor)?i.valor:0)}`));L.push(`Total de adicionais: ${brl.format(sum)}`)}
+  if(items.length){L.push('','Adicionais do mês:');items.forEach(i=>L.push(`• ${i.desc||'Item'}: ${i.cortesia?'cortesia':brl.format(isNum(i.valor)?i.valor:0)}`));L.push(`Total de adicionais: ${brl.format(sum)}`)}
   L.push('',`Total do mês: ${brl.format(plano+sum)}`);
   return L.join('\n');
 }
@@ -1031,8 +1035,8 @@ function openItems(id){
   };
   const draw=()=>{
     const body=`<div class="sec">${esc(mesLabel(refMes))}</div>
-      <div class="ithead"><span>O que foi feito</span><span style="text-align:right">Valor final</span><span></span></div>
-      <div class="itlist">${items.map((i,n)=>`<div class="itrow" data-n="${n}"><input id="it-d-${n}" class="d" placeholder="Ex.: Folder, vídeo extra, dronagem" value="${esc(i.desc||'')}" aria-label="Descrição do item ${n+1}"><input id="it-v-${n}" class="v" inputmode="decimal" placeholder="0,00" value="${isNum(i.valor)?i.valor.toFixed(2).replace('.',','):''}" aria-label="Valor do item ${n+1}"><button class="mini" type="button" data-rm="${n}" aria-label="Remover item ${n+1}">×</button></div>`).join('')}</div>
+      <div class="ithead c4"><span>O que foi feito</span><span style="text-align:right">Valor final</span><span></span><span></span></div>
+      <div class="itlist">${items.map((i,n)=>`<div class="itrow c4" data-n="${n}"><input id="it-d-${n}" class="d" placeholder="Ex.: Folder, vídeo extra, dronagem" value="${esc(i.desc||'')}" aria-label="Descrição do item ${n+1}"><input id="it-v-${n}" class="v" inputmode="decimal" ${i.cortesia?'disabled placeholder="Cortesia" value=""':`placeholder="0,00" value="${isNum(i.valor)?i.valor.toFixed(2).replace('.',','):''}"`} aria-label="Valor do item ${n+1}"><label class="cort" title="Cortesia: fica registrado e não soma no valor"><input type="checkbox" class="ck" id="it-c-${n}"${i.cortesia?' checked':''}>Cortesia</label><button class="mini" type="button" data-rm="${n}" aria-label="Remover item ${n+1}">×</button></div>`).join('')}</div>
       <div><button class="btn" type="button" id="itAdd">+ Adicionar item</button></div>
       <div class="itsum" id="itSum"></div>
       <div class="sec">Texto para o e-mail do boleto</div>
@@ -1040,16 +1044,24 @@ function openItems(id){
     redes=true; shell(`Adicionais · ${r.cliente||''}`,body,`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="itUndo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button class="btn" id="itCopy" type="button">Copiar para o e-mail</button></div><div style="display:flex;gap:8px"><button class="btn" id="itCancel" type="button">Cancelar</button><button class="btn primary" id="itSave" type="button">Salvar</button></div>`);
     redes=false; drawerUndo=desfazerItens; $('#itUndo').onclick=desfazerItens;
     const sync=()=>{
-      document.querySelectorAll('.itrow').forEach(row=>{const n=+row.dataset.n;if(!items[n])return;items[n].desc=row.querySelector('.d').value.trim();const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
+      document.querySelectorAll('.itrow').forEach(row=>{const n=+row.dataset.n;if(!items[n])return;items[n].desc=row.querySelector('.d').value.trim();
+        const ck=row.querySelector('.ck');items[n].cortesia=!!(ck&&ck.checked);
+        if(items[n].cortesia) return; // cortesia: o valor digitado fica guardado, mas não conta
+        const v=parseMoney(row.querySelector('.v').value);items[n].valor=(v===null||isNaN(v))?null:v});
       const clean=items.filter(i=>i.desc||isNum(i.valor));
-      const plano=!semCobranca(r)&&isNum(r.valorMensal)?r.valorMensal:0, sum=clean.reduce((s,i)=>s+(isNum(i.valor)?i.valor:0),0);
-      $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length})</span><span>${brl.format(sum)}</span></div><div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
+      const plano=!semCobranca(r)&&!ehEsporadico(r)&&isNum(r.valorMensal)?r.valorMensal:0, sum=clean.reduce((s,i)=>s+(!i.cortesia&&isNum(i.valor)?i.valor:0),0);
+      const nCort=clean.filter(i=>i.cortesia).length;
+      $('#itSum').innerHTML=`<div><span>Plano mensal</span><span>${brl.format(plano)}</span></div><div><span>Adicionais (${clean.length-nCort})</span><span>${brl.format(sum)}</span></div>${nCort?`<div><span>Cortesias (${nCort})</span><span>${brl.format(0)}</span></div>`:''}<div class="tt"><span>Total do mês</span><span>${brl.format(plano+sum)}</span></div>`;
       $('#itMail').value=emailText(r,clean);
       return clean;
     };
     sync(); syncAtual=sync;
     const lista=document.querySelector('.itlist');
     lista.addEventListener('input',sync);
+    lista.addEventListener('change',e=>{const ck=e.target.closest('.ck');if(!ck)return;
+      const n=+ck.closest('.itrow').dataset.n, ant=JSON.stringify(items.map((x,i)=>i===n?{...x,cortesia:!ck.checked}:x));
+      hist.push(ant); antesFoco=null; sync(); draw();
+      document.getElementById((ck.checked?'it-c-':'it-v-')+n)?.focus()});
     lista.addEventListener('focusin',()=>{if(redes)return;sync();antesFoco=estado()});
     lista.addEventListener('focusout',()=>{if(redes)return;sync();if(antesFoco!==null&&estado()!==antesFoco)hist.push(antesFoco);antesFoco=null});
     document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();hist.push(estado());items.splice(+b.dataset.rm,1);if(!items.length)items.push({id:randHex(6),mes:refMes,desc:'',valor:null});draw()});
@@ -1061,7 +1073,7 @@ function openItems(id){
     $('#itSave').onclick=async()=>{
       if(!canWrite){toast('Você só tem acesso de leitura.');return}
       for(const row of document.querySelectorAll('.itrow')){const raw=row.querySelector('.v').value;if(raw.trim()&&isNaN(parseMoney(raw))){toast(`“${raw}” não é um valor válido. Use algo como 150,00.`);row.querySelector('.v').focus();return}}
-      const clean=sync().map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:isNum(i.valor)?i.valor:0}));
+      const clean=sync().map(i=>({id:i.id||randHex(6),mes:refMes,desc:i.desc,valor:i.cortesia?0:(isNum(i.valor)?i.valor:0),cortesia:!!i.cortesia}));
       const others=(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).filter(i=>i&&i.mes!==refMes);
       $('#itSave').disabled=true;
       const antes=copia(r);

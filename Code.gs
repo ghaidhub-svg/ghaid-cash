@@ -99,8 +99,8 @@ function listar_() {
   a.rows.forEach(function (r) {
     if (!r[0]) return;
     var k = String(r[1]);
-    var vv = String(r[5]).trim();
-    (itens[k] = itens[k] || []).push({ id: String(r[0]), mes: String(r[3]), desc: String(r[4]), valor: vv === '' ? null : (Number(vv.replace(',', '.')) || 0) });
+    var vv = String(r[5]).trim(), cort = /^cortesia$/i.test(vv); // cortesia: fica registrado e vale zero
+    (itens[k] = itens[k] || []).push({ id: String(r[0]), mes: String(r[3]), desc: String(r[4]), valor: cort ? 0 : (vv === '' ? null : (Number(vv.replace(',', '.')) || 0)), cortesia: cort });
   });
   return c.rows.filter(function (r) { return r[0] !== ''; }).map(function (r) {
     var o = {};
@@ -146,7 +146,7 @@ function salvarItens_(id, nome, itens) {
   for (var i = t.rows.length - 1; i >= 0; i--) if (String(t.rows[i][1]) === id) s.deleteRow(i + 2);
   if (!itens.length) return;
   var linhas = itens.map(function (x) {
-    var v = (x.valor === null || x.valor === undefined || x.valor === '') ? '' : String(x.valor);
+    var v = x.cortesia ? 'cortesia' : ((x.valor === null || x.valor === undefined || x.valor === '') ? '' : String(x.valor));
     return [x.id || Utilities.getUuid().slice(0, 8), id, nome || '', x.mes, x.desc || '', v];
   });
   s.getRange(s.getLastRow() + 1, 1, linhas.length, CAB_ADIC.length).setNumberFormat('@').setValues(linhas);
@@ -347,10 +347,10 @@ function juntarItensAssist_(id, novos) {
   (novos || []).forEach(function (n) {
     if (!n || !String(n.desc || '').trim()) return;
     var velho = n.id && porId[n.id];
-    var item = { id: velho ? velho.id : Utilities.getUuid().slice(0, 8), mes: String(n.mes || (velho && velho.mes) || ''), desc: String(n.desc).trim(), valor: velho ? velho.valor : null };
+    var item = { id: velho ? velho.id : Utilities.getUuid().slice(0, 8), mes: String(n.mes || (velho && velho.mes) || ''), desc: String(n.desc).trim(), valor: velho ? velho.valor : null, cortesia: velho ? !!velho.cortesia : false };
     vistos[item.id] = true; saida.push(item);
   });
-  atuais.forEach(function (i) { if (!vistos[i.id] && i.valor !== null && i.valor !== 0) saida.push(i); });
+  atuais.forEach(function (i) { if (!vistos[i.id] && ((i.valor !== null && i.valor !== 0) || i.cortesia)) saida.push(i); });
   return saida;
 }
 
