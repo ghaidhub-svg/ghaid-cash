@@ -208,6 +208,10 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub{color:var(--muted)}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
+.bolitens{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
+.bolitens div{display:flex;justify-content:space-between;gap:10px}
+.bolitt{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.bolok{font-weight:700}
 .bollote{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .bolchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:1px 4px 1px 8px;margin:2px 0;color:var(--fg)}
 .bolchip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit;padding:0 4px}
@@ -1353,11 +1357,12 @@ function boletosDoMes(){
     const partes=partesBoleto(r,div,total);
     if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'Dia de vencimento');
     const esp=ehEsporadico(r), gerar=okNoMes(r); // só entra no texto com OK no Status cobrança deste mês
-    const disp=(lerJSON(r.disparoMeses)||[]).includes(refMes);
-    return {r,pag,total,div,partes,faltas,esp,gerar,disp};
+    const disp=(lerJSON(r.disparoMeses)||[]).includes(refMes), incluir=(lerJSON(r.liberadoMeses)||[]).includes(refMes);
+    return {r,pag,total,div,partes,faltas,esp,gerar,disp,incluir};
   }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
 }
-const vaiNoTexto=b=>b.gerar&&!b.disp&&!b.faltas.length; // lote atual: OK no mês, ainda não disparado, sem pendência
+// vai para o texto: OK na coluna Status cobrança (entra no painel) + OK para disparar dentro do painel, ainda não disparado, sem pendência
+const vaiNoTexto=b=>b.gerar&&b.incluir&&!b.disp&&!b.faltas.length;
 const PASTA_BOLETOS=()=>`Downloads/Boletos GHAID/${refMes}`;
 const nomeArquivo=(b,i)=>`${refMes} ${String(b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${b.partes.length>1?` boleto ${i+1} de ${b.partes.length}`:''}.pdf`;
 const emailDe=b=>valido(b.r.email)?b.r.email:(valido(b.pag.email)?b.pag.email:null);
@@ -1507,13 +1512,14 @@ function openBoletos(){
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
         <div class="bolsub${emailDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'sem e-mail (não entra no envio)'}${whatsDe(b)?` · WhatsApp ${esc(whatsDe(b))}`:''}</div>
         ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de vencimento)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
-        <label class="boldiv"><input type="checkbox" data-gerar${b.gerar?' checked':''}> OK, liberado para gerar boleto</label>${b.gerar?'':'<div class="bolsub">Aguardando OK no Status cobrança: fica fora do texto do Claude in Chrome.</div>'}
+        ${(it=>it.length?`<div class="bolitens"><span class="bolitt">${ehEsporadico(r)?'Serviços do mês':'Adicionais do mês'}</span>${it.map(i=>{const st=sitDe(i);return `<div><span>${esc(i.desc||'Item')}</span><span>${st?SIT_TEXTO[st]:isNum(i.valor)?brl.format(i.valor):'sem preço'}</span></div>`}).join('')}</div>`:'')(itemsOf(r))}
+        <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
         <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) neste lote, somando ${brl.format(soma)}. Entra quem está com <strong>OK</strong> no Status cobrança deste mês e ainda não foi disparado${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) com OK para disparar, somando ${brl.format(soma)}. Aqui aparecem os clientes com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} sem OK na coluna)`:''}. Confira, decida a forma de pagamento e marque <strong>OK para disparar</strong> em quem vai neste disparo: só esses entram nos textos. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.filter(b=>b.gerar&&!b.disp).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
@@ -1555,8 +1561,12 @@ function openBoletos(){
     document.querySelectorAll('.bol').forEach(el=>{
       const id=el.dataset.id;
       el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
-      el.querySelector('[data-gerar]')?.addEventListener('change',async e=>{ // é o mesmo OK da coluna Status cobrança
-        await setOk(id,{key:'status'},e.target.checked?'OK':null); draw();
+      el.querySelector('[data-incluir]')?.addEventListener('change',async e=>{ // OK de dentro do painel: entra neste disparo
+        const r=rows.find(x=>x.id===id); if(!r) return;
+        const st=new Set(lerJSON(r.liberadoMeses)||[]); e.target.checked?st.add(refMes):st.delete(refMes);
+        const a=[...st].sort(), v=a.length?JSON.stringify(a):null;
+        await setCampo(id,'liberadoMeses',v,e.target.checked?`${r.cliente}: OK para disparar`:`${r.cliente}: fora deste disparo`);
+        const x=rows.find(y=>y.id===id); if(x) x.liberadoMeses=v; draw();
       });
       el.querySelector('[data-pagador]')?.addEventListener('change',e=>{const v=e.target.value;setCampo(id,'pagadorId',v,'Pagador do grupo salvo').then(()=>{const a=rows.find(x=>x.id===id);if(a)a.pagadorId=v;draw()})});
     });
