@@ -1449,6 +1449,9 @@ const whatsDigitos=w=>{const d=String(String(w||'').split(/[,;\/]| e /)[0]).repl
 // o Sicredi baixa o PDF como "Boleto-" + nome do pagador; o 2º do mesmo pagador ganha " (1)"
 const nomeArquivo=(b,i)=>`Boleto-${String(b.pag.razao||b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${i>0?` (${i})`:''}.pdf`;
 const autoEnvio=()=>!!cfgFlags.autoEnvio;
+/* anexos do envio: boleto(s) e, se tiver nota no mês, o PDF da nota (mesmo nome do arquivo anexado no GHAID Cash, na mesma pasta) */
+const anexosDe=b=>{const nf=notaDoMes(b.r), L=b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ');
+  return nf?`${L} e a nota fiscal${nf.num?` nº ${nf.num}`:''}: ${nf.arqNome||`(PDF da nota${nf.num?` nº ${nf.num}`:''} deste cliente)`}`:L};
 const emailDe=b=>valido(b.r.email)?b.r.email:(valido(b.pag.email)?b.pag.email:null);
 const whatsDe=b=>valido(b.r.whatsapp)?b.r.whatsapp:(valido(b.pag.whatsapp)?b.pag.whatsapp:null);
 const EMAIL_FIM_PADRAO='Qualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe GHAID';
@@ -1472,13 +1475,13 @@ function textoEmails(lista){
   const L=[`Enviar os boletos por e-mail · ${mesLabel(refMes)}`,'',
     de?`Envie pelo Gmail da conta ${de} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${de}, troque para ela ou pare e me avise. Não envie por outra conta.`
       :'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual conta enviar e não envie por nenhuma outra.',
-    'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'.',
+    'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+' Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
     'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
     autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada e-mail. Pule (sem enviar) só quem tiver PDF não encontrado ou dúvida sobre o arquivo certo. No final, me mostre o resumo: enviados e pulados, com o motivo.'
       :'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
   comEmail.forEach((b,n)=>{
     L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Para: ${emailDe(b)}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`,
-      `Anexar: ${b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ')}`,'Texto:',corpoEmail(b),'');
+      `Anexar: ${anexosDe(b)}`,'Texto:',corpoEmail(b),'');
   });
   if(semEmail.length){L.push('Sem e-mail cadastrado (não enviar, cadastre o e-mail no GHAID Cash):');semEmail.forEach(b=>L.push(`- ${b.r.cliente}`))}
   return L.join('\n');
@@ -1488,13 +1491,13 @@ function textoWhats(lista){
   const L=[`Enviar os boletos por WhatsApp · ${mesLabel(refMes)}`,'',
     de?`Envie pelo WhatsApp Web conectado no número ${de} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado (Configurações → perfil): se não for ${de}, pare e me avise. Não envie por outro número.`
       :'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual número enviar e não envie por nenhum outro.',
-    'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+'.',
+    'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+' Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
     'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
     autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada mensagem. Pule só quem tiver PDF não encontrado, dúvida sobre o arquivo certo ou número sem WhatsApp. No final, me mostre o resumo: enviados e pulados, com o motivo.'
       :'Antes de enviar cada mensagem, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule esse cliente.',''];
   com.forEach((b,n)=>{
     L.push(`--- ${n+1}. ${b.r.cliente} ---`,`WhatsApp: ${whatsDe(b)} · abrir: https://web.whatsapp.com/send?phone=${whatsDigitos(whatsDe(b))}`,
-      `Anexar: ${b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ')}`,'Mensagem:',corpoEmail(b),'');
+      `Anexar: ${anexosDe(b)}`,'Mensagem:',corpoEmail(b),'');
   });
   if(sem.length){L.push('Sem WhatsApp cadastrado (não enviar por aqui):');sem.forEach(b=>L.push(`- ${b.r.cliente}`))}
   return L.join('\n');
@@ -1701,7 +1704,7 @@ function openBoletos(){
         ${conferirBoleto(b).map(c=>`<div class="bolconf"><span>${esc(c.txt)}</span><button class="mini" type="button" data-conf="${c.acao}" title="Marcar como conferido" aria-label="Marcar como conferido">Conferido</button></div>`).join('')}
         <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
-        ${(nf=>nf?`<div class="bolnota"><span>Nota fiscal${nf.num?` nº ${esc(nf.num)}`:''}: ${brl.format(nf.bruto)}${nf.iss>0?` − ISS retido ${brl.format(nf.iss)}`:''} = <strong>${brl.format(nf.liquido)}</strong> no boleto${nf.arquivo?` · <a href="${esc(nf.arquivo)}" target="_blank" rel="noopener">ver PDF</a>`:''}</span><span class="bolnotabtns"><button class="mini" type="button" data-nota title="Trocar a nota">Trocar</button><button class="mini" type="button" data-semnota title="Tirar a nota deste mês">Remover</button></span></div>`:'')(notaDoMes(r))}
+        ${(nf=>nf?`<div class="bolnota"><span>Nota fiscal${nf.num?` nº ${esc(nf.num)}`:''}: ${brl.format(nf.bruto)}${nf.iss>0?` − ISS retido ${brl.format(nf.iss)}`:''} = <strong>${brl.format(nf.liquido)}</strong> no boleto${nf.arquivo?` · <a href="${esc(nf.arquivo)}" target="_blank" rel="noopener">ver PDF</a>`:''}${nf.arqNome?`<br><span class="bolorig">Para o envio, deixe o arquivo ${esc(nf.arqNome)} na pasta ${esc(PASTA_BOLETOS())}.</span>`:''}</span><span class="bolnotabtns"><button class="mini" type="button" data-nota title="Trocar a nota">Trocar</button><button class="mini" type="button" data-semnota title="Tirar a nota deste mês">Remover</button></span></div>`:'')(notaDoMes(r))}
         <div class="bolbtns"><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button>${notaDoMes(r)?'':'<button class="btn bolbtn" type="button" data-nota>Anexar nota fiscal</button>'}</div>
       </div>`;
     };
