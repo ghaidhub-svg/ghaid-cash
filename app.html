@@ -1455,6 +1455,8 @@ const whatsDigitos=w=>{const d=String(String(w||'').split(/[,;\/]| e /)[0]).repl
 // o Sicredi baixa o PDF como "Boleto-" + nome do pagador; o 2º do mesmo pagador ganha " (1)"
 const nomeArquivo=(b,i)=>`Boleto-${String(b.pag.razao||b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${i>0?` (${i})`:''}.pdf`;
 const autoEnvio=()=>!!cfgFlags.autoEnvio;
+/* número do documento: começa depois dos boletos já disparados no mês, ou no "próximo nº" escolhido no painel (o que for maior) */
+const docInicio=lista=>Math.max(lista.filter(b=>b.disp).reduce((t,b)=>t+b.partes.length,0)+1,+((cfgFlags.docProx||{})[refMes])||1);
 /* anexos do envio: boleto(s) e, se tiver nota no mês, o PDF da nota (mesmo nome do arquivo anexado no GHAID Cash, na mesma pasta) */
 const anexosDe=b=>{const nf=notaDoMes(b.r), L=b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ');
   return nf?`${L} e a nota fiscal${nf.num?` nº ${nf.num}`:''}: ${nf.arqNome||`(PDF da nota${nf.num?` nº ${nf.num}`:''} deste cliente)`}`:L};
@@ -1521,7 +1523,7 @@ function textoBoletos(lista){
     'Se o banco der erro (ex.: sistema indisponível), confira se o boleto não foi criado antes de tentar de novo, para não emitir em dobro.',
     `Depois de emitir cada boleto, baixe o PDF. O Chrome já está configurado para baixar direto na pasta ${PASTA_BOLETOS()}, sem perguntar onde salvar. O Sicredi salva como "Boleto-" + nome do pagador no banco (arquivo esperado indicado na linha). Anote o nome com que cada arquivo foi baixado e, no final, me mostre a lista: cliente → nome do arquivo (e boleto 1 ou 2, se for dividido). Essa lista será usada nos envios por e-mail e WhatsApp.`,''];
   // numeração do mês: continua depois dos boletos dos lotes já disparados, para não repetir número
-  let n=0, nDoc=lista.filter(b=>b.disp).reduce((t,b)=>t+b.partes.length,0);
+  let n=0, nDoc=docInicio(lista)-1;
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
     const nf=notaDoMes(b.r), extra=(b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'')+(nf?` · valor pela NFS-e${nf.num?` nº ${nf.num}`:''}${nf.iss>0?' (líquido, ISS retido pelo cliente)':''}`:'');
     L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
@@ -1717,6 +1719,7 @@ function openBoletos(){
     };
     shell('Boletos do mês',`
       <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) com OK para disparar, somando ${brl.format(soma)}. Aqui aparecem os clientes com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} sem OK na coluna)`:''}. Confira, decida a forma de pagamento e marque <strong>OK para disparar</strong> em quem vai neste disparo: só esses entram nos textos. Não pagantes, contas de grupo e arquivados ficam de fora. Os valores são de ${esc(mesLabel(refMes).toLowerCase())} e o vencimento fica em <strong>${esc(mesLabel(mesVenc()).toLowerCase())}</strong>, no dia da coluna Dia de vencimento.</p>
+      <div class="bolcfg"><div class="field"><label for="bDocProx">Próximo nº do documento</label><input id="bDocProx" inputmode="numeric" value="${refMes.replace('-','')}-${String(docInicio(lista)).padStart(2,'0')}"></div><div></div></div>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       ${(n=>n?`<div class="bolaguarda">${n} cobrança(s) com algo para conferir (aviso tracejado no cartão). Confira e clique em Conferido.</div>`:'')(lista.filter(b=>b.gerar&&!b.disp&&conferirBoleto(b).length).length)}
       <div class="sec">Cobranças</div>
@@ -1772,6 +1775,9 @@ function openBoletos(){
     $('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Saudação final salva')};
     const salvarCfg=()=>{cfgFlags={...cfgFlags,boleto:{juros:$('#bJuros').value.trim()||BOLETO_PADRAO.juros,multa:$('#bMulta').value.trim()||BOLETO_PADRAO.multa}};saveCols();$('#bolTexto').value=textoBoletos(boletosDoMes());toast('Juros e multa salvos')};
     $('#bJuros').onchange=salvarCfg; $('#bMulta').onchange=salvarCfg;
+    $('#bDocProx').onchange=()=>{const m=/(\d+)\s*$/.exec($('#bDocProx').value), v=m?parseInt(m[1],10):NaN;
+      if(!(v>=1&&v<1000)){toast('Use só o número final, como 23.');$('#bDocProx').value=`${refMes.replace('-','')}-${String(docInicio(boletosDoMes())).padStart(2,'0')}`;return}
+      cfgFlags={...cfgFlags,docProx:{...(cfgFlags.docProx||{}),[refMes]:v}};saveCols();draw();toast(`Numeração deste mês começa no ${String(v).padStart(2,'0')}`)};
     // grava e garante o valor novo na linha atual (uma leitura antiga da planilha pode ter chegado no meio)
     const salvarDiv=async(id,valor)=>{await setCampo(id,'boleto2',valor,valor?'Divisão em 2 boletos salva':'Volta a ser boleto único');const a=rows.find(x=>x.id===id);if(a)a.boleto2=valor;draw()};
     document.querySelectorAll('.bol').forEach(el=>{
