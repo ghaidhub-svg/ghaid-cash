@@ -1433,14 +1433,17 @@ function textoWhats(lista){
 }
 function textoBoletos(lista){
   const cfg=cfgBoleto(), prontos=lista.filter(vaiNoTexto);
-  const L=[`Gerar boletos no Sicredi · ${mesLabel(refMes)}`,`Juros: ${cfg.juros} · Multa: ${cfg.multa}`,'',
+  const L=[`Gerar boletos no Sicredi · ${mesLabel(refMes)}`,`Juros: ${cfg.juros} · Multa: ${String(cfg.multa).replace(/\s*ao mês$/i,'')} (única, cobrada após o vencimento)`,
+    'Espécie do documento: DSI (Duplicata de Serviço por Indicação)',
+    `Número do documento: o indicado em cada linha (mês + sequência, ex.: ${refMes.replace('-','')}-01). Não reutilize números já usados neste mês.`,'',
     'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
     'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',
-    `Depois de emitir cada boleto, baixe o PDF e salve na pasta ${PASTA_BOLETOS()} (dentro de Documentos deste computador, não em Downloads; crie a pasta se ainda não existir) com o nome indicado na linha. Esses arquivos serão anexados nos e-mails e no WhatsApp depois.`,''];
-  let n=0;
-  prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
+    `Depois de emitir cada boleto, baixe o PDF. O Chrome já está configurado para baixar direto na pasta ${PASTA_BOLETOS()}, sem perguntar onde salvar. Se der para escolher o nome, use o indicado na linha. Se não der, anote o nome com que cada arquivo foi baixado e, no final, me mostre a lista: cliente → nome do arquivo (e boleto 1 ou 2, se for dividido). Essa lista será usada nos envios por e-mail e WhatsApp.`,''];
+  // numeração do mês: continua depois dos boletos dos lotes já disparados, para não repetir número
+  let n=0, nDoc=lista.filter(b=>b.disp).reduce((t,b)=>t+b.partes.length,0);
+  prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
     const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
-    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · salvar como: ${nomeArquivo(b,i)}`)}));
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · salvar como: ${nomeArquivo(b,i)}`)}));
   const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
@@ -1581,7 +1584,7 @@ function openBoletos(){
       <div class="sec">Envio pelo financeiro</div>
       <div class="bolcfg"><div class="field"><label for="bDeEmail">E-mail que envia</label><input id="bDeEmail" type="email" placeholder="financeiro@..." value="${esc(envioCfg().email)}"></div><div class="field"><label for="bDeWhats">WhatsApp que envia</label><input id="bDeWhats" inputmode="tel" placeholder="51 99999-9999" value="${esc(envioCfg().whats)}"></div></div>
       <div class="sec">1. Texto para gerar os boletos (Claude in Chrome no Sicredi)</div>
-      <p class="sub" style="margin:0;font-size:12px">Os PDFs vão para <strong>${esc(PASTA_BOLETOS())}</strong>. Para isso, ative no Chrome: Configurações → Downloads → Perguntar onde salvar cada arquivo.</p>
+      <p class="sub" style="margin:0;font-size:12px">Os PDFs vão para <strong>${esc(PASTA_BOLETOS())}</strong>. Antes de colar: crie essa pasta e, no Chrome (chrome://settings/downloads), mude o Local para ela, com "Perguntar onde salvar" desligado.</p>
       <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>
       <div><button class="btn" id="bolCopiar" type="button">Copiar texto 1</button></div>
       <div class="sec">2. Texto para enviar os e-mails (Claude in Chrome no Gmail, depois de gerar)</div>
