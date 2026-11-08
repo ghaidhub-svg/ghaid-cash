@@ -208,6 +208,11 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub{color:var(--muted)}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
+.bolnota{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;border:1px solid var(--line);border-radius:var(--r);padding:6px 8px}
+.bolnota a{color:inherit}
+.bolnotabtns{display:flex;gap:6px}
+.bolnotabtns .mini{width:auto;padding:0 8px;font-size:12px}
+.bolbtns{display:flex;gap:8px;flex-wrap:wrap}
 .bolconf{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--alert-text);border:1px dashed var(--alert-text);border-radius:var(--r);padding:6px 8px}
 .bolconf .mini{white-space:nowrap;padding:0 8px;width:auto;font-size:12px}
 .bolitens{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
@@ -1362,11 +1367,49 @@ function docValido(v){
   if(d.length===14){if(/^(\d)\1+$/.test(d))return false;const dv=n=>{const w=n===12?[5,4,3,2,9,8,7,6,5,4,3,2]:[6,5,4,3,2,9,8,7,6,5,4,3,2];const s=w.reduce((t,x,i)=>t+x*d[i],0)%11;return s<2?0:11-s};return dv(12)===+d[12]&&dv(13)===+d[13]}
   return false;
 }
+/* nota fiscal do mês: campo notasMeses = {'AAAA-MM': {num, bruto, iss, liquido, cnpj, arquivo, arqNome}}.
+   Com nota no mês, o boleto sai com o valor líquido da nota (serviço menos ISS retido pelo cliente). */
+function notaDoMes(r,m=refMes){const n=(lerJSON(r&&r.notasMeses)||{})[m];return n&&isNum(n.liquido)?n:null}
+const PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let pdfjsPronto=null;
+function carregarPdfjs(){
+  if(!pdfjsPronto) pdfjsPronto=new Promise((ok,bad)=>{const sc=document.createElement('script');sc.src=PDFJS+'pdf.min.js';sc.onload=async()=>{
+    try{const w=await fetch(PDFJS+'pdf.worker.min.js').then(x=>x.text());window.pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([w],{type:'text/javascript'}))}
+    catch(e){window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS+'pdf.worker.min.js'}
+    ok(window.pdfjsLib)};sc.onerror=()=>{pdfjsPronto=null;bad(new Error('Não consegui carregar o leitor de PDF.'))};document.head.appendChild(sc)});
+  return pdfjsPronto;
+}
+async function textoDoPdf(buf){
+  const lib=await carregarPdfjs(), doc=await lib.getDocument({data:buf}).promise; let t='';
+  for(let i=1;i<=doc.numPages;i++){const pg=await doc.getPage(i), c=await pg.getTextContent();t+=' '+c.items.map(x=>x.str).join(' ')}
+  return t.replace(/\s+/g,' ');
+}
+/* lê a DANFSe (nota de serviço nacional): número, valor do serviço, ISS retido, valor líquido e CNPJ do tomador */
+function lerNota(t){
+  const din=v=>{const m=/([\d.]+,\d{2})/.exec(v||'');return m?parseMoney(m[1]):null}, V='(-|R\\$\\s*[\\d.]+,\\d{2})', o={};
+  const pega=(...rs)=>{for(const re of rs){const m=re.exec(t);if(m)return m}return null};
+  // o leitor de PDF traz "rótulo valor"; outras extrações trazem a linha de rótulos e depois a de valores
+  let m=pega(/N[ÚU]MERO DA NFS-e\s+(\d+)\b/i,/N[ÚU]MERO DA NFS-e\s+COMPET[ÊE]NCIA DA NFS-e\s+DATA E HORA DA EMISS[ÃA]O DA NFS-e\s+(\d+)/i,/N[°º] NFS-e \/ CHAVE NFS-e\s+(\d+)/i); if(m) o.num=m[1];
+  m=pega(new RegExp('VALOR DA OPERA[ÇC][ÃA]O / SERVI[ÇC]O\\s+'+V,'i'),new RegExp('Desconto Condicionado\\s+'+V,'i')); if(m) o.bruto=din(m[1]);
+  m=pega(new RegExp('Total das Reten[çc][õo]es \\(ISSQN / Federais\\)\\s+'+V,'i')); if(m) o.iss=m[1]==='-'?0:din(m[1]);
+  m=pega(/VALOR L[ÍI]QUIDO DA NFS-e\s+(R\$\s*[\d.]+,\d{2})/i); if(m) o.liquido=din(m[1]);
+  if(!isNum(o.liquido)){m=new RegExp('L[ÍI]QUIDO DA NFS-e \\+ IBS/CBS\\s+'+V+'\\s+'+V,'i').exec(t);if(m){o.iss=m[1]==='-'?0:din(m[1]);o.liquido=din(m[2])}}
+  if(!isNum(o.iss)&&isNum(o.bruto)&&isNum(o.liquido)) o.iss=r2(o.bruto-o.liquido);
+  const docs=[...t.matchAll(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2}/g)].map(x=>x[0]);
+  o.cnpj=docs.find((d,i)=>i>0&&d!==docs[0])||null; // o 1º documento da nota é o da GHAID (prestador); o seguinte é o do cliente (tomador)
+  if(!isNum(o.bruto)&&isNum(o.liquido)) o.bruto=r2(o.liquido+(o.iss||0));
+  if(!isNum(o.liquido)&&isNum(o.bruto)) o.liquido=r2(o.bruto-(o.iss||0));
+  return o;
+}
+const soDig=v=>String(v||'').replace(/\D/g,'');
 /* pontos para conferir antes de gerar (não bloqueiam): cadastro importado como provável e valor diferente do último boleto */
 function conferirBoleto(b){
   const r=b.r, L=[];
   if(String(r.vinculo||'').trim().toLowerCase()==='provável') L.push({txt:'Razão social e CNPJ vieram da importação como "provável". Confira no contrato.',acao:'vinculo'});
-  if(isNum(r.valorBoleto)&&isNum(b.total)&&Math.abs(r.valorBoleto-b.total)>0.009) L.push({txt:`O último boleto registrado foi de ${brl.format(r.valorBoleto)}. Este sai com ${brl.format(b.total)}.`,acao:'valor'});
+  const nf=notaDoMes(r), bruto=tm(r);
+  if(nf&&isNum(bruto)&&Math.abs(nf.bruto-bruto)>0.009) L.push({txt:`A nota é de ${brl.format(nf.bruto)}, mas plano + adicionais do mês dá ${brl.format(bruto)}. O boleto segue a nota.`,acao:'nota'});
+  if(nf&&nf.cnpj&&soDig(nf.cnpj)!==soDig(b.pag.doc)) L.push({txt:`A nota está no CNPJ/CPF ${nf.cnpj}, diferente do pagador (${b.pag.doc||'sem CNPJ'}).`,acao:'nota'});
+  if(!nf&&isNum(r.valorBoleto)&&isNum(b.total)&&Math.abs(r.valorBoleto-b.total)>0.009) L.push({txt:`O último boleto registrado foi de ${brl.format(r.valorBoleto)}. Este sai com ${brl.format(b.total)}.`,acao:'valor'});
   return L;
 }
 function partesBoleto(r,div,total){
@@ -1384,7 +1427,7 @@ function partesBoleto(r,div,total){
 }
 function boletosDoMes(){
   return rows.filter(r=>!r.arquivado&&!ehConta(r)&&!semCobranca(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>{
-    const total=tm(r), pag=pagadorDe(r), div=lerJSON(r.boleto2), faltas=[];
+    const nf=notaDoMes(r), total=nf?nf.liquido:tm(r), pag=pagadorDe(r), div=lerJSON(r.boleto2), faltas=[]; // com nota no mês, vale o líquido da nota
     if(!valido(pag.razao)) faltas.push('razão social');
     if(!valido(pag.doc)) faltas.push('CNPJ/CPF');
     else if(!docValido(pag.doc)) faltas.push('CNPJ/CPF com número errado');
@@ -1415,7 +1458,9 @@ function corpoEmail(b){
   if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`)}
   if(!ehEsporadico(r)) L.push(`Plano mensal: ${brl.format(planoValor(r))}`);
   if(it.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');it.forEach(i=>{const st=sitDe(i);L.push(`• ${i.desc||'Item'}: ${st?SIT_TEXTO[st]:brl.format(isNum(i.valor)?i.valor:0)}`)})}
-  L.push(`Total: ${brl.format(b.total)}`);
+  const nf=notaDoMes(r);
+  if(nf){L.push(`Nota fiscal${nf.num?` nº ${nf.num}`:''}: ${brl.format(nf.bruto)}`);if(nf.iss>0)L.push(`ISS retido por vocês: − ${brl.format(nf.iss)}`)}
+  L.push(`${nf?'Total do boleto':'Total'}: ${brl.format(b.total)}`);
   if(b.partes.length>1) b.partes.forEach((x,i)=>L.push(`Boleto ${i+1} de ${b.partes.length}: ${brl.format(x.valor)}, vencimento ${dataBR(x.venc)}`));
   else L.push(`Vencimento: ${dataBR(b.partes[0].venc)}`);
   L.push('',emailFim());
@@ -1469,11 +1514,69 @@ function textoBoletos(lista){
   // numeração do mês: continua depois dos boletos dos lotes já disparados, para não repetir número
   let n=0, nDoc=lista.filter(b=>b.disp).reduce((t,b)=>t+b.partes.length,0);
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
-    const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
+    const nf=notaDoMes(b.r), extra=(b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'')+(nf?` · valor pela NFS-e${nf.num?` nº ${nf.num}`:''}${nf.iss>0?' (líquido, ISS retido pelo cliente)':''}`:'');
     L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
   const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
+}
+/* anexar nota fiscal: escolhe o PDF, lê os valores, mostra para conferir e salva no mês da tela */
+function escolherNota(id,depois){
+  if(!canWrite){toast('Você só tem acesso de leitura.');return}
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='application/pdf,.pdf';
+  inp.onchange=async()=>{const f=inp.files&&inp.files[0]; if(!f) return;
+    if(f.size>8*1024*1024){toast('PDF grande demais (máximo 8 MB).');return}
+    toast('Lendo a nota…'); let buf, lido={};
+    try{buf=await f.arrayBuffer();lido=lerNota(await textoDoPdf(buf.slice(0)))}
+    catch(e){toast('Não consegui ler o PDF. Preencha os valores da nota na janela.')}
+    abrirNota(id,lido,f,buf,depois)};
+  inp.click();
+}
+function abrirNota(id,lido,arq,buf,depois){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  const pag=pagadorDe(r), bruto=tm(r);
+  fecharDivisao();
+  const scrim=document.createElement('div'); scrim.className='modalscrim'; scrim.onclick=fecharDivisao;
+  const m=document.createElement('div'); m.className='modal'; m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-label','Nota fiscal');
+  const mt=v=>isNum(v)?moedaTxt(v):'';
+  m.innerHTML=`<h3>Nota fiscal · ${esc(mesLabel(refMes).toLowerCase())}</h3>
+    <p class="sub" style="margin:0;font-size:13px">${esc(r.cliente||'')} · plano + adicionais do mês: ${isNum(bruto)?brl.format(bruto):'sem valor'}. Confira os valores lidos da nota.</p>
+    <div class="dvdatas">
+      <div class="field"><label for="nfNum">Número da nota</label><input id="nfNum" value="${esc(lido.num||'')}"></div>
+      <div class="field"><label for="nfBruto">Valor do serviço</label><input id="nfBruto" inputmode="decimal" placeholder="0,00" value="${mt(lido.bruto)}"></div>
+      <div class="field"><label for="nfIss">ISS retido pelo cliente</label><input id="nfIss" inputmode="decimal" placeholder="0,00 (não retido)" value="${lido.iss>0?mt(lido.iss):''}"></div>
+      <div class="field"><label>Valor do boleto</label><div class="calcv" id="nfLiq"></div></div>
+    </div>
+    <p class="sub" id="nfAviso" style="margin:0;font-size:12px"></p>
+    <div class="dvfoot"><span></span><div style="display:flex;gap:8px"><button class="btn" type="button" id="nfCancel">Cancelar</button><button class="btn primary" type="button" id="nfSalvar">Salvar nota</button></div></div>`;
+  document.body.append(scrim,m);
+  const conta=()=>{const b=parseMoney($('#nfBruto').value), i=parseMoney($('#nfIss').value)||0, ok=isNum(b)&&b>0;
+    $('#nfLiq').textContent=ok?brl.format(r2(b-i)):'—';
+    const av=[];
+    if(ok&&isNum(bruto)&&Math.abs(b-bruto)>0.009) av.push(`A nota não bate com plano + adicionais do mês (${brl.format(bruto)}).`);
+    if(lido.cnpj&&soDig(lido.cnpj)!==soDig(pag.doc)) av.push(`A nota está no CNPJ/CPF ${lido.cnpj}, e o pagador é ${pag.doc||'sem CNPJ'}.`);
+    $('#nfAviso').textContent=av.join(' ')||'O boleto e os textos 1, 2 e 3 passam a usar o valor do boleto acima.';
+    $('#nfAviso').style.color=av.length?'var(--alert-text)':''};
+  $('#nfBruto').oninput=conta; $('#nfIss').oninput=conta; conta();
+  $('#nfCancel').onclick=fecharDivisao;
+  m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();fecharDivisao()}});
+  $('#nfSalvar').onclick=async()=>{
+    const b=parseMoney($('#nfBruto').value), iRaw=parseMoney($('#nfIss').value), i=isNum(iRaw)?iRaw:0;
+    if(!isNum(b)||b<=0){toast('Digite o valor do serviço da nota.');$('#nfBruto').focus();return}
+    if(isNaN(iRaw)||i<0||i>=b){toast('ISS retido inválido.');$('#nfIss').focus();return}
+    const nota={num:$('#nfNum').value.trim()||null,bruto:b,iss:i,liquido:r2(b-i),cnpj:lido.cnpj||null,arquivo:null,arqNome:arq?arq.name:null};
+    const grava=async(nt,msg)=>{const x=rows.find(y=>y.id===id);if(!x)return;const n={...(lerJSON(x.notasMeses)||{}),[refMes]:nt},v=JSON.stringify(n);
+      await setCampo(id,'notasMeses',v,msg);const a=rows.find(y=>y.id===id);if(a)a.notasMeses=v;depois&&depois()};
+    fecharDivisao();
+    await grava(nota,`${r.cliente}: nota salva, boleto de ${brl.format(nota.liquido)}`);
+    if(buf&&!LEGACY){ // guarda o PDF no Drive (GHAID Cash / Notas fiscais / AAAA-MM)
+      try{let bin='';const u=new Uint8Array(buf);for(let k=0;k<u.length;k+=0x8000)bin+=String.fromCharCode.apply(null,u.subarray(k,k+0x8000));
+        const res=await GA('salvarNota',refMes,`${refMes} ${r.cliente}${nota.num?` NF ${nota.num}`:''}.pdf`,btoa(bin));
+        if(res&&res.url){const x=rows.find(y=>y.id===id),atual=x&&notaDoMes(x);if(atual){const n={...(lerJSON(x.notasMeses)||{}),[refMes]:{...atual,arquivo:res.url}},v=JSON.stringify(n);try{await writeDoc(id,{notasMeses:v},'update');x.notasMeses=v;depois&&depois()}catch(e){}}}
+      }catch(e){toast('Valores da nota salvos. O PDF não foi guardado no Drive: falta atualizar o Code.gs.')}
+    }
+  };
+  $('#nfBruto').focus();
 }
 /* janela para escolher como dividir e as datas */
 function fecharDivisao(){document.querySelector('.modal')?.remove();document.querySelector('.modalscrim')?.remove()}
@@ -1598,7 +1701,8 @@ function openBoletos(){
         ${conferirBoleto(b).map(c=>`<div class="bolconf"><span>${esc(c.txt)}</span><button class="mini" type="button" data-conf="${c.acao}" title="Marcar como conferido" aria-label="Marcar como conferido">Conferido</button></div>`).join('')}
         <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
-        <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
+        ${(nf=>nf?`<div class="bolnota"><span>Nota fiscal${nf.num?` nº ${esc(nf.num)}`:''}: ${brl.format(nf.bruto)}${nf.iss>0?` − ISS retido ${brl.format(nf.iss)}`:''} = <strong>${brl.format(nf.liquido)}</strong> no boleto${nf.arquivo?` · <a href="${esc(nf.arquivo)}" target="_blank" rel="noopener">ver PDF</a>`:''}</span><span class="bolnotabtns"><button class="mini" type="button" data-nota title="Trocar a nota">Trocar</button><button class="mini" type="button" data-semnota title="Tirar a nota deste mês">Remover</button></span></div>`:'')(notaDoMes(r))}
+        <div class="bolbtns"><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button>${notaDoMes(r)?'':'<button class="btn bolbtn" type="button" data-nota>Anexar nota fiscal</button>'}</div>
       </div>`;
     };
     shell('Boletos do mês',`
@@ -1663,8 +1767,13 @@ function openBoletos(){
     document.querySelectorAll('.bol').forEach(el=>{
       const id=el.dataset.id;
       el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
+      el.querySelectorAll('[data-nota]').forEach(btn=>btn.onclick=()=>escolherNota(id,draw));
+      el.querySelector('[data-semnota]')?.addEventListener('click',async()=>{const r=rows.find(x=>x.id===id);if(!r)return;
+        const n={...(lerJSON(r.notasMeses)||{})};delete n[refMes];const v=Object.keys(n).length?JSON.stringify(n):null;
+        await setCampo(id,'notasMeses',v,`${r.cliente}: nota de ${mesLabel(refMes).toLowerCase()} removida`);const a=rows.find(x=>x.id===id);if(a)a.notasMeses=v;draw()});
       el.querySelectorAll('[data-conf]').forEach(btn=>btn.onclick=async()=>{ // conferido: vínculo vira Confirmado; valor: o último boleto passa a ser o deste mês
         const r=rows.find(x=>x.id===id); if(!r) return;
+        if(btn.dataset.conf==='nota'){toast('Se a nota estiver errada, use Trocar ou Remover na linha da nota.');return}
         if(btn.dataset.conf==='vinculo'){await setCampo(id,'vinculo','Confirmado',`${r.cliente}: cadastro conferido`);const a=rows.find(x=>x.id===id);if(a)a.vinculo='Confirmado'}
         else{const t=tm(r);await setCampo(id,'valorBoleto',isNum(t)?t:null,`${r.cliente}: valor conferido`);const a=rows.find(x=>x.id===id);if(a)a.valorBoleto=isNum(t)?t:null}
         draw();

@@ -362,3 +362,19 @@ function juntarItensAssist_(id, novos) {
 function excluirCliente(token, id) { dona_(token); return excluirCliente_(id); }
 function lerConfig(token) { sessao_(token); return lerConfig_(); }
 function salvarConfig(token, cfg) { dona_(token); return salvarConfig_(cfg); }
+
+// Guarda o PDF de uma nota fiscal no Drive: pasta GHAID Cash / Notas fiscais / AAAA-MM. Devolve o link.
+function salvarNota(token, mes, nome, base64) {
+  dona_(token);
+  if (!/^\d{4}-\d{2}$/.test(String(mes))) throw new Error('Mês inválido.');
+  var bytes = Utilities.base64Decode(String(base64 || ''));
+  if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw new Error('PDF vazio ou grande demais.');
+  var pasta = subpasta_(subpasta_(DriveApp.getFolderById(PASTA_ID), 'Notas fiscais'), String(mes));
+  var limpo = String(nome || 'nota.pdf').replace(/[\\\/:*?"<>|]+/g, ' ').slice(0, 150);
+  var f = pasta.createFile(Utilities.newBlob(bytes, 'application/pdf', limpo));
+  return { url: f.getUrl(), id: f.getId() };
+}
+function subpasta_(pai, nome) {
+  var it = pai.getFoldersByName(nome);
+  return it.hasNext() ? it.next() : pai.createFolder(nome);
+}
