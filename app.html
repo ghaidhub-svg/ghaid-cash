@@ -323,6 +323,8 @@ td.items .c{cursor:pointer;color:var(--fg);font-weight:600}
 td.items .c.empty{color:var(--muted);font-weight:500;font-size:12px}
 td.items .c.visto{color:var(--good)}
 td.items .c.sempreco,td.items .c.sempreco .cnt{color:var(--alert-text)}
+td.nfcell .c.okv{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+td.nfcell .perm{font-size:11px;font-weight:500;color:var(--muted)}
 td.temperm .c{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 td.temperm .perm{font-size:11px;font-weight:500;color:var(--muted)}
 td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
@@ -531,7 +533,8 @@ function permutaNoMes(r,m=refMes){
   if(h.some(e=>'permuta' in e)){let v=0;for(const e of h) if(e.desde<=m) v=isNum(e.permuta)?e.permuta:0;return v}
   const v=r?Number(r.valorPermuta):0; return r&&!isEmpty(r.valorPermuta)&&isFinite(v)?v:0;
 }
-const valorDe=(c,r)=>c.key==='valorMensal'?planoNoMes(r):r[c.key];
+// Nota fiscal na tabela = nota anexada no mês da tela (o valor antigo da importação fica guardado, mas não aparece)
+const valorDe=(c,r)=>c.key==='valorMensal'?planoNoMes(r):c.key==='valorNF'?(notaDoMes(r)?notaDoMes(r).bruto:null):r[c.key];
 function mesLabel(m){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1)}
 function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1+d,1);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`}
 function itemsOf(r,m=refMes){return Array.isArray(r.adicionaisItens)?r.adicionaisItens.filter(i=>i&&i.mes===m):[]}
@@ -544,7 +547,7 @@ const CALC={
   adicionais:r=>{const it=itemsOf(r);return it.length?it.reduce((s,i)=>s+(contaNoValor(i)?i.valor:0),0):null},
   totalMes:r=>{const a=CALC.adicionais(r), pl=ehEsporadico(r)?null:planoNoMes(r);return (isNum(pl)||a!=null)?(isNum(pl)?pl:0)+(a||0):null},
   diferenca:r=>{const t=CALC.totalMes(r);return (isNum(r.valorBoleto)&&t!=null)?r.valorBoleto-t:null},
-  liquidoNF:r=>isNum(r.valorNF)?r.valorNF-(isNum(r.issRetido)?r.issRetido:0):null,
+  liquidoNF:r=>{const n=notaDoMes(r);return n?n.liquido:null},
 };
 const SUGGEST=['status','vinculo','publicacoes','diaEnvio','multa','mora'];
 
@@ -817,7 +820,7 @@ function render(){
       if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=okDe(c,r);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(valorDe(c,r))&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
-      if(c.key==='valorNF'){const tem=!isEmpty(r[c.key]);return `<td class="money nfcell${tem?' hasis':''}" data-k="${c.key}"><div class="c${tem?' okv':' nfnao'}" title="${tem?'Valor da nota fiscal. Clique para mudar':'Sem nota fiscal. Clique para colocar o valor'}">${tem?esc(fmt(c,r)):'Não'}</div>${tem?`<button class="isbtn" type="button" data-nfmenu title="Opções" aria-label="Opções da nota fiscal">▾</button>`:''}</td>`}
+      if(c.key==='valorNF'){const nf=notaDoMes(r);return `<td class="money nfcell" data-k="${c.key}"><div class="c${nf?' okv':' nfnao'}" title="${nf?`Nota${nf.num?` nº ${nf.num}`:''} de ${mesLabel(refMes).toLowerCase()}: boleto de ${brl.format(nf.liquido)}. Clique para trocar`:`Sem nota em ${mesLabel(refMes).toLowerCase()}. Clique para anexar o PDF da nota`}">${nf?`${esc(brl.format(nf.bruto))}${nf.num?`<span class="perm">nº ${esc(nf.num)}${nf.iss>0?` · líquido ${esc(brl.format(nf.liquido))}`:''}</span>`:''}`:'Não'}</div></td>`}
       const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo','simnao'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
       if(c.key==='publicacoes'){const t=pubResumo(r),curto=pubCurto(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" data-tip="<strong>Publicações</strong>${esc(t||'Não definido. Clique para preencher.')}">${miss?'?':esc(curto||t)}</div>${seta}</td>`}
@@ -883,6 +886,7 @@ $('#tbody').addEventListener('click',e=>{
   if(td.classList.contains('na')) return;
   if(k==='publicacoes'){openPub(id);return}
   if(k==='valorMensal'&&!ASSIST()){abrirPlano(id);return}
+  if(k==='valorNF'&&!ASSIST()){escolherNota(id,()=>render());return} // nota fiscal: anexa o PDF do mês da tela
   if(ASSIST()&&!EDITA_ASSIST.includes(k)) return;
   const col=cols.find(c=>c.key===k); if(col&&col.items){openItems(id);return} if(!col||col.type==='calc') return;
   if(col.type==='ok'||col.type==='simnao'||col.type==='tipo'||td.classList.contains('na')) return;
@@ -1370,6 +1374,8 @@ function docValido(v){
 /* nota fiscal do mês: campo notasMeses = {'AAAA-MM': {num, bruto, iss, liquido, cnpj, arquivo, arqNome}}.
    Com nota no mês, o boleto sai com o valor líquido da nota (serviço menos ISS retido pelo cliente). */
 function notaDoMes(r,m=refMes){const n=(lerJSON(r&&r.notasMeses)||{})[m];return n&&isNum(n.liquido)?n:null}
+/* valor do boleto com nota: o líquido da nota. Se a nota é do valor cheio (plano + permuta), a permuta sai do boleto. */
+function boletoPelaNota(r,nf){const pm=permutaNoMes(r), t=tm(r);return pm>0&&isNum(t)&&Math.abs(nf.bruto-(t+pm))<0.01?r2(nf.liquido-pm):nf.liquido}
 const PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
 let pdfjsPronto=null;
 function carregarPdfjs(){
@@ -1407,7 +1413,7 @@ function conferirBoleto(b){
   const r=b.r, L=[];
   if(String(r.vinculo||'').trim().toLowerCase()==='provável') L.push({txt:'Razão social e CNPJ vieram da importação como "provável". Confira no contrato.',acao:'vinculo'});
   const nf=notaDoMes(r), bruto=tm(r);
-  if(nf&&isNum(bruto)&&Math.abs(nf.bruto-bruto)>0.009) L.push({txt:`A nota é de ${brl.format(nf.bruto)}, mas plano + adicionais do mês dá ${brl.format(bruto)}. O boleto segue a nota.`,acao:'nota'});
+  if(nf&&isNum(bruto)&&Math.abs(nf.bruto-bruto)>0.009&&Math.abs(nf.bruto-(bruto+permutaNoMes(r)))>0.009) L.push({txt:`A nota é de ${brl.format(nf.bruto)}, mas plano + adicionais do mês dá ${brl.format(bruto)}. O boleto segue a nota.`,acao:'nota'});
   if(nf&&nf.cnpj&&soDig(nf.cnpj)!==soDig(b.pag.doc)) L.push({txt:`A nota está no CNPJ/CPF ${nf.cnpj}, diferente do pagador (${b.pag.doc||'sem CNPJ'}).`,acao:'nota'});
   if(!nf&&isNum(r.valorBoleto)&&isNum(b.total)&&Math.abs(r.valorBoleto-b.total)>0.009) L.push({txt:`O último boleto registrado foi de ${brl.format(r.valorBoleto)}. Este sai com ${brl.format(b.total)}.`,acao:'valor'});
   return L;
@@ -1427,7 +1433,7 @@ function partesBoleto(r,div,total){
 }
 function boletosDoMes(){
   return rows.filter(r=>!r.arquivado&&!ehConta(r)&&!semCobranca(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>{
-    const nf=notaDoMes(r), total=nf?nf.liquido:tm(r), pag=pagadorDe(r), div=lerJSON(r.boleto2), faltas=[]; // com nota no mês, vale o líquido da nota
+    const nf=notaDoMes(r), total=nf?boletoPelaNota(r,nf):tm(r), pag=pagadorDe(r), div=lerJSON(r.boleto2), faltas=[]; // com nota no mês, vale o líquido da nota
     if(!valido(pag.razao)) faltas.push('razão social');
     if(!valido(pag.doc)) faltas.push('CNPJ/CPF');
     else if(!docValido(pag.doc)) faltas.push('CNPJ/CPF com número errado');
@@ -1462,7 +1468,7 @@ function corpoEmail(b){
   if(!ehEsporadico(r)) L.push(`Plano mensal: ${brl.format(planoValor(r))}`);
   if(it.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');it.forEach(i=>{const st=sitDe(i);L.push(`• ${i.desc||'Item'}: ${st?SIT_TEXTO[st]:brl.format(isNum(i.valor)?i.valor:0)}`)})}
   const nf=notaDoMes(r);
-  if(nf){L.push(`Nota fiscal${nf.num?` nº ${nf.num}`:''}: ${brl.format(nf.bruto)}`);if(nf.iss>0)L.push(`ISS retido por vocês: − ${brl.format(nf.iss)}`)}
+  if(nf){L.push(`Nota fiscal${nf.num?` nº ${nf.num}`:''}: ${brl.format(nf.bruto)}`);if(nf.iss>0)L.push(`ISS retido por vocês: − ${brl.format(nf.iss)}`);if(boletoPelaNota(r,nf)!==nf.liquido)L.push(`Permuta: − ${brl.format(permutaNoMes(r))}`)}
   L.push(`${nf?'Total do boleto':'Total'}: ${brl.format(b.total)}`);
   if(b.partes.length>1) b.partes.forEach((x,i)=>L.push(`Boleto ${i+1} de ${b.partes.length}: ${brl.format(x.valor)}, vencimento ${dataBR(x.venc)}`));
   else L.push(`Vencimento: ${dataBR(b.partes[0].venc)}`);
@@ -1553,10 +1559,11 @@ function abrirNota(id,lido,arq,buf,depois){
     <p class="sub" id="nfAviso" style="margin:0;font-size:12px"></p>
     <div class="dvfoot"><span></span><div style="display:flex;gap:8px"><button class="btn" type="button" id="nfCancel">Cancelar</button><button class="btn primary" type="button" id="nfSalvar">Salvar nota</button></div></div>`;
   document.body.append(scrim,m);
+  const pm=permutaNoMes(r);
   const conta=()=>{const b=parseMoney($('#nfBruto').value), i=parseMoney($('#nfIss').value)||0, ok=isNum(b)&&b>0;
-    $('#nfLiq').textContent=ok?brl.format(r2(b-i)):'—';
+    $('#nfLiq').textContent=ok?brl.format(boletoPelaNota(r,{bruto:b,liquido:r2(b-i)}))+(pm>0&&isNum(bruto)&&Math.abs(b-(bruto+pm))<0.01?` (descontada a permuta de ${brl.format(pm)})`:''):'—';
     const av=[];
-    if(ok&&isNum(bruto)&&Math.abs(b-bruto)>0.009) av.push(`A nota não bate com plano + adicionais do mês (${brl.format(bruto)}).`);
+    if(ok&&isNum(bruto)&&Math.abs(b-bruto)>0.009&&Math.abs(b-(bruto+pm))>0.009) av.push(`A nota não bate com plano + adicionais do mês (${brl.format(bruto)}).`);
     if(lido.cnpj&&soDig(lido.cnpj)!==soDig(pag.doc)) av.push(`A nota está no CNPJ/CPF ${lido.cnpj}, e o pagador é ${pag.doc||'sem CNPJ'}.`);
     $('#nfAviso').textContent=av.join(' ')||'O boleto e os textos 1, 2 e 3 passam a usar o valor do boleto acima.';
     $('#nfAviso').style.color=av.length?'var(--alert-text)':''};
@@ -1571,7 +1578,7 @@ function abrirNota(id,lido,arq,buf,depois){
     const grava=async(nt,msg)=>{const x=rows.find(y=>y.id===id);if(!x)return;const n={...(lerJSON(x.notasMeses)||{}),[refMes]:nt},v=JSON.stringify(n);
       await setCampo(id,'notasMeses',v,msg);const a=rows.find(y=>y.id===id);if(a)a.notasMeses=v;depois&&depois()};
     fecharDivisao();
-    await grava(nota,`${r.cliente}: nota salva, boleto de ${brl.format(nota.liquido)}`);
+    await grava(nota,`${r.cliente}: nota salva, boleto de ${brl.format(boletoPelaNota(r,nota))}`);
     if(buf&&!LEGACY){ // guarda o PDF no Drive (GHAID Cash / Notas fiscais / AAAA-MM)
       try{let bin='';const u=new Uint8Array(buf);for(let k=0;k<u.length;k+=0x8000)bin+=String.fromCharCode.apply(null,u.subarray(k,k+0x8000));
         const res=await GA('salvarNota',refMes,`${refMes} ${r.cliente}${nota.num?` NF ${nota.num}`:''}.pdf`,btoa(bin));
@@ -1704,7 +1711,7 @@ function openBoletos(){
         ${conferirBoleto(b).map(c=>`<div class="bolconf"><span>${esc(c.txt)}</span><button class="mini" type="button" data-conf="${c.acao}" title="Marcar como conferido" aria-label="Marcar como conferido">Conferido</button></div>`).join('')}
         <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
-        ${(nf=>nf?`<div class="bolnota"><span>Nota fiscal${nf.num?` nº ${esc(nf.num)}`:''}: ${brl.format(nf.bruto)}${nf.iss>0?` − ISS retido ${brl.format(nf.iss)}`:''} = <strong>${brl.format(nf.liquido)}</strong> no boleto${nf.arquivo?` · <a href="${esc(nf.arquivo)}" target="_blank" rel="noopener">ver PDF</a>`:''}${nf.arqNome?`<br><span class="bolorig">Para o envio, deixe o arquivo ${esc(nf.arqNome)} na pasta ${esc(PASTA_BOLETOS())}.</span>`:''}</span><span class="bolnotabtns"><button class="mini" type="button" data-nota title="Trocar a nota">Trocar</button><button class="mini" type="button" data-semnota title="Tirar a nota deste mês">Remover</button></span></div>`:'')(notaDoMes(r))}
+        ${(nf=>nf?`<div class="bolnota"><span>Nota fiscal${nf.num?` nº ${esc(nf.num)}`:''}: ${brl.format(nf.bruto)}${nf.iss>0?` − ISS retido ${brl.format(nf.iss)}`:''} ${boletoPelaNota(r,nf)!==nf.liquido?` − permuta ${brl.format(permutaNoMes(r))}`:''} = <strong>${brl.format(boletoPelaNota(r,nf))}</strong> no boleto${nf.arquivo?` · <a href="${esc(nf.arquivo)}" target="_blank" rel="noopener">ver PDF</a>`:''}${nf.arqNome?`<br><span class="bolorig">Para o envio, deixe o arquivo ${esc(nf.arqNome)} na pasta ${esc(PASTA_BOLETOS())}.</span>`:''}</span><span class="bolnotabtns"><button class="mini" type="button" data-nota title="Trocar a nota">Trocar</button><button class="mini" type="button" data-semnota title="Tirar a nota deste mês">Remover</button></span></div>`:'')(notaDoMes(r))}
         <div class="bolbtns"><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button>${notaDoMes(r)?'':'<button class="btn bolbtn" type="button" data-nota>Anexar nota fiscal</button>'}</div>
       </div>`;
     };
@@ -2066,6 +2073,7 @@ function openClient(id){
     if(c.type==='tipo'&&id&&ehConta(r)) return `<div class="field"><label>Grupo</label><div class="calcv">Conta do grupo ${esc(grupoDe(r).cliente||'')}</div></div>`;
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
     if(c.key==='valorMensal'&&id&&!ASSIST()){const v=planoNoMes(r);return `<div class="field${c.required&&isEmpty(v)?' miss':''}"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${isNum(v)?brl.format(v):esc(v??'sem valor')}${permutaNoMes(r)>0?` + ${brl.format(permutaNoMes(r))} em permuta`:''}</span><button class="btn" type="button" id="goPlano">Mudar valor do plano</button></div></div>`}
+    if(c.key==='valorNF'&&id&&!ASSIST()){const nf=notaDoMes(r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${nf?`${brl.format(nf.bruto)}${nf.num?` · nº ${esc(nf.num)}`:''}${nf.iss>0?` · boleto ${brl.format(nf.liquido)}`:''}`:'Sem nota neste mês'}</span><button class="btn" type="button" id="goNota">${nf?'Trocar nota':'Anexar nota fiscal'}</button></div></div>`}
     if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
@@ -2085,6 +2093,7 @@ function openClient(id){
   if($('#goItems')) $('#goItems').onclick=()=>openItems(id);
   if($('#goPub')) $('#goPub').onclick=()=>openPub(id);
   if($('#goPlano')) $('#goPlano').onclick=()=>abrirPlano(id);
+  if($('#goNota')) $('#goNota').onclick=()=>escolherNota(id,()=>openClient(id));
   if(ASSIST()&&id){$('#saveBtn').hidden=true;$('#cancelBtn').textContent='Fechar'}
   $('#f-cliente')?.focus();
   $('#saveBtn').onclick=async()=>{
