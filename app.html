@@ -183,7 +183,7 @@ td .c.isento{color:var(--muted);font-style:italic}
 .pubrow input.q{text-align:right}
 #pubSum{font-size:13px;font-weight:600}
 #pubSum.warn{color:var(--bad)}
-.assist .dash,.assist #boletosBtn,.assist #resetOkBtn,.assist #colsBtn,.assist #csvBtn,.assist .colbar,.assist .chip[data-f="arq"],.assist .chip[data-f="pag"],.assist .chip[data-f="livre"],.assist #listBtn,.assist #newBtn,.assist .act{display:none!important}
+.assist .dash,.assist #boletosBtn,.assist #resetOkBtn,.assist #colsBtn,.assist #csvBtn,.assist .colbar,.assist .chip[data-f="arq"],.assist .chip[data-f="pag"],.assist .chip[data-f="pagmes"],.assist .chip[data-f="livre"],.assist #listBtn,.assist #newBtn,.assist .act{display:none!important}
 .selbox{width:16px;height:16px;margin:0;flex:none;accent-color:var(--fg);cursor:pointer}
 .gbadge{flex:none;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px;color:var(--muted);border:1px solid var(--line)}
 tr.grupo td.namecell .nm{font-weight:700}
@@ -456,6 +456,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
       <button class="chip" data-f="todos" aria-pressed="false">Todos</button>
       <button class="chip" data-f="ativos" aria-pressed="true">Ativos</button>
       <button class="chip" data-f="pag" aria-pressed="false" title="Só quem paga mensalidade (R$), incluindo grupos">Pagantes</button>
+      <button class="chip" data-f="pagmes" aria-pressed="false" title="Todos que pagam neste mês: mensalistas e esporádicos com valor no mês">Pagantes do mês</button>
       <button class="chip" data-f="arq" aria-pressed="false">Arquivados</button>
       <button class="chip" data-f="esp" aria-pressed="false" title="Clientes sem plano mensal, com atendimentos pontuais">Esporádicos</button>
       <button class="chip" data-f="pend" aria-pressed="false">Com pendência</button>
@@ -706,12 +707,14 @@ const COLS_ASSIST=['cliente','publicacoes','adicionais'];
 const EDITA_ASSIST=['publicacoes','adicionais'];
 const podeVer=c=>!ASSIST()||COLS_ASSIST.includes(c.key);
 function visibleCols(){return cols.filter(c=>ASSIST()?podeVer(c):c.visible)}
+/* paga neste mês: não arquivado, não é conta de grupo nem não pagante, e tem valor a receber no mês (plano + adicionais) */
+const pagaNoMes=r=>!!r&&!r.arquivado&&!ehConta(r)&&!semCobranca(r)&&isNum(tm(r))&&tm(r)>0;
 function view(){
   const q=query.trim().toLowerCase();
   const passaBase=r=>{
     if(ASSIST()&&ehGrupo(r)) return false;
     if(filter==='arq'&&!r.arquivado) return false;
-    if((filter==='ativos'||filter==='pend'||filter==='livre'||filter==='esp'||filter==='pag')&&r.arquivado) return false;
+    if((filter==='ativos'||filter==='pend'||filter==='livre'||filter==='esp'||filter==='pag'||filter==='pagmes')&&r.arquivado) return false;
     return true;
   };
   const passa=r=>{
@@ -719,6 +722,7 @@ function view(){
     if(filter==='livre'&&!semCobranca(r)) return false;
     if(filter==='esp'&&!ehEsporadico(r)) return false;
     if(filter==='pag'&&(semCobranca(r)||ehEsporadico(r))) return false; // pagante: paga mensalidade (inclui grupos e suas contas)
+    if(filter==='pagmes'&&!pagaNoMes(r)) return false; // pagantes do mês: mensalistas e esporádicos com valor a receber no mês
     if(filter==='pend'&&!missing(r).length) return false;
     if(q){const hay=cols.map(c=>fmt(c,r)).join(' ').toLowerCase();if(!hay.includes(q))return false}
     return true;
@@ -742,7 +746,7 @@ function view(){
   const out=[];
   for(const r of topo){
     out.push(r);
-    if(ehGrupo(r)) out.push(...contasDe(r).filter(c=>passou.has(c.id)||(passou.has(r.id)&&passaBase(c))));
+    if(ehGrupo(r)) out.push(...contasDe(r).filter(c=>passou.has(c.id)||(filter!=='pagmes'&&passou.has(r.id)&&passaBase(c))));
   }
   return out;
 }
@@ -758,6 +762,7 @@ function render(){
   document.querySelector('.chip[data-f="ativos"]').textContent=`Ativos (${act.length})`;
   document.querySelector('.chip[data-f="arq"]').textContent=nArq?`Arquivados (${nArq})`:'Arquivados';
   {const nP=act.filter(r=>!ehConta(r)&&!semCobranca(r)&&!ehEsporadico(r)).length;document.querySelector('.chip[data-f="pag"]').textContent=nP?`Pagantes (${nP})`:'Pagantes'}
+  {const nM=act.filter(pagaNoMes).length;document.querySelector('.chip[data-f="pagmes"]').textContent=nM?`Pagantes do mês (${nM})`:'Pagantes do mês'}
   {const nE=act.filter(ehEsporadico).length;document.querySelector('.chip[data-f="esp"]').textContent=nE?`Esporádicos (${nE})`:'Esporádicos'}
   {const nL=act.filter(semCobranca).length;document.querySelector('.chip[data-f="livre"]').textContent=nL?`Não pagantes (${nL})`:'Não pagantes'}
   renderDash(act,nArq);
@@ -769,6 +774,8 @@ function render(){
   $('#sortNote').innerHTML=(sortKey==='cliente'&&sortDir===1)
     ?'Ordem alfabética por cliente (A–Z).'
     :`Ordenado por <strong>${esc(sc?sc.label:sortKey)}</strong> ${sortDir===1?'crescente':'decrescente'}. <button class="linkbtn" id="resetSort">Voltar para A–Z</button>`;
+  if(filter==='pagmes'){const pm=rows.filter(pagaNoMes),esp=pm.filter(ehEsporadico),men=pm.filter(r=>!ehEsporadico(r)),soma=l=>l.reduce((t,r)=>t+tm(r),0);
+    $('#sortNote').innerHTML=`<strong>${esc(mesLabel(refMes))}: ${pm.length} pagante(s), entram ${brl.format(soma(pm))}.</strong> Mensalistas: ${men.length} (${brl.format(soma(men))}) · Esporádicos com valor no mês: ${esp.length} (${brl.format(soma(esp))}). `+$('#sortNote').innerHTML}
   const rs=$('#resetSort'); if(rs) rs.onclick=()=>{sortKey='cliente';sortDir=1;render()};
 
   if(!loaded&&!rows.length) return;
@@ -776,7 +783,7 @@ function render(){
   if(!rows.length||!list.length){
     $('#tbl').hidden=true;$('#emptyState').hidden=false;
     $('#emptyState').innerHTML=rows.length
-      ?(filter==='pag'?'<strong>Nenhum cliente pagante</strong>Clientes com R$ na coluna Tipo aparecem aqui.':filter==='esp'?'<strong>Nenhum cliente esporádico</strong>Escolha Esporádico na coluna Tipo para o cliente aparecer aqui.':filter==='livre'?'<strong>Nenhum cliente não pagante</strong>Marque parceria, permuta ou filantropia na coluna Tipo para o cliente aparecer aqui.':filter==='arq'?'<strong>Nenhum cliente arquivado</strong>Clientes arquivados saem da tabela principal e dos totais, mas continuam guardados aqui.':'<strong>Nenhum cliente neste filtro</strong>Mude o filtro ou a busca para ver os demais.')
+      ?(filter==='pagmes'?`<strong>Nenhum pagante em ${esc(mesLabel(refMes).toLowerCase())}</strong>Aparecem aqui os mensalistas com valor de plano e os esporádicos com serviço lançado no mês.`:filter==='pag'?'<strong>Nenhum cliente pagante</strong>Clientes com R$ na coluna Tipo aparecem aqui.':filter==='esp'?'<strong>Nenhum cliente esporádico</strong>Escolha Esporádico na coluna Tipo para o cliente aparecer aqui.':filter==='livre'?'<strong>Nenhum cliente não pagante</strong>Marque parceria, permuta ou filantropia na coluna Tipo para o cliente aparecer aqui.':filter==='arq'?'<strong>Nenhum cliente arquivado</strong>Clientes arquivados saem da tabela principal e dos totais, mas continuam guardados aqui.':'<strong>Nenhum cliente neste filtro</strong>Mude o filtro ou a busca para ver os demais.')
       :'<strong>Nenhum cliente cadastrado</strong>Use “+ Novo cliente” para adicionar o primeiro.';
     return;
   }
@@ -2016,7 +2023,7 @@ let loadTimer;
 function enterApp(){
   $('#loginView').hidden=true; $('#appView').hidden=false;
   document.body.classList.toggle('assist',ASSIST()); $('#acessosBtn').hidden=LEGACY||ASSIST(); $('#logoutBtn').hidden=LEGACY;
-  if(ASSIST()&&(filter==='livre'||filter==='pag')) filter='ativos';
+  if(ASSIST()&&(filter==='livre'||filter==='pag'||filter==='pagmes')) filter='ativos';
   loaded=false; render();
   clearTimeout(loadTimer);
   loadTimer=setTimeout(()=>{if(!loaded){setSync('off','Sem resposta do banco');$('#emptyState').innerHTML='<strong>Não consegui carregar os dados ainda</strong>Verifique a conexão. A tabela aparece assim que o banco responder.'}},10000);
