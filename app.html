@@ -1481,7 +1481,10 @@ function corpoEmail(b){
   const r=b.r, mes=mesLabel(refMes).toLowerCase(), it=itemsOf(r), L=[`Olá, ${r.cliente}!`,'',`Segue em anexo ${b.partes.length>1?'os boletos referentes':'o boleto referente'} a ${mes}.`,'',`Protocolo da cobrança · ${mes}`];
   if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`)}
   if(!ehEsporadico(r)) L.push(`Plano mensal: ${brl.format(planoValor(r))}`);
-  if(it.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');it.forEach(i=>{const st=sitDe(i);L.push(`• ${i.desc||'Item'}: ${st?SIT_TEXTO[st]:brl.format(isNum(i.valor)?i.valor:0)}`)})}
+  // para o cliente: sem itens pendentes (R$ 0,00 sem situação ou sem preço) e sem anotações internas entre parênteses, como "(verificar ...)"
+  const limpaDesc=d=>String(d||'Item').replace(/\s*\((?:verificar|ver se|conferir|confirmar)[^)]*\)/gi,'').trim()||'Item';
+  const itC=it.filter(i=>sitDe(i)||(isNum(i.valor)&&i.valor>0));
+  if(itC.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');itC.forEach(i=>{const st=sitDe(i);L.push(`• ${limpaDesc(i.desc)}: ${st?SIT_TEXTO[st]:brl.format(i.valor)}`)})}
   const nf=notaDoMes(r);
   if(nf){L.push(`Nota fiscal${nf.num?` nº ${nf.num}`:''}: ${brl.format(nf.bruto)}`);if(nf.iss>0)L.push(`ISS retido por vocês: − ${brl.format(nf.iss)}`);if(boletoPelaNota(r,nf)!==nf.liquido)L.push(`Permuta: − ${brl.format(permutaNoMes(r))}`)}
   L.push(`${nf?'Total do boleto':'Total'}: ${brl.format(b.total)}`);
