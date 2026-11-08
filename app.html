@@ -208,6 +208,9 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub{color:var(--muted)}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
+.bollote{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.bolchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:1px 4px 1px 8px;margin:2px 0;color:var(--fg)}
+.bolchip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit;padding:0 4px}
 .bolaguarda{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r);padding:10px 12px}
 .bolsememail{color:var(--alert-text)}
 #bFim{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--fg);resize:vertical}
@@ -1350,10 +1353,11 @@ function boletosDoMes(){
     const partes=partesBoleto(r,div,total);
     if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'Dia de vencimento');
     const esp=ehEsporadico(r), gerar=okNoMes(r); // só entra no texto com OK no Status cobrança deste mês
-    return {r,pag,total,div,partes,faltas,esp,gerar};
+    const disp=(lerJSON(r.disparoMeses)||[]).includes(refMes);
+    return {r,pag,total,div,partes,faltas,esp,gerar,disp};
   }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
 }
-const vaiNoTexto=b=>b.gerar&&!b.faltas.length;
+const vaiNoTexto=b=>b.gerar&&!b.disp&&!b.faltas.length; // lote atual: OK no mês, ainda não disparado, sem pendência
 const PASTA_BOLETOS=()=>`Downloads/Boletos GHAID/${refMes}`;
 const nomeArquivo=(b,i)=>`${refMes} ${String(b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${b.partes.length>1?` boleto ${i+1} de ${b.partes.length}`:''}.pdf`;
 const emailDe=b=>valido(b.r.email)?b.r.email:(valido(b.pag.email)?b.pag.email:null);
@@ -1393,7 +1397,7 @@ function textoBoletos(lista){
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
     const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
     L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · salvar como: ${nomeArquivo(b,i)}`)}));
-  const pend=lista.filter(b=>b.gerar&&b.faltas.length);
+  const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
 }
@@ -1509,10 +1513,12 @@ function openBoletos(){
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) liberado(s), somando ${brl.format(soma)}. Só entra no texto quem está com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) neste lote, somando ${brl.format(soma)}. Entra quem está com <strong>OK</strong> no Status cobrança deste mês e ainda não foi disparado${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
-      <div class="imp">${lista.filter(b=>b.gerar).map(card).join('')||`<div class="sub">Nenhum cliente com OK em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
+      <div class="imp">${lista.filter(b=>b.gerar&&!b.disp).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
+      ${prontos.length?`<div class="bollote"><button class="btn" type="button" id="bolDisparado">Marcar estes ${prontos.length} como disparados</button><span>Use depois de gerar e enviar. Eles saem da lista deste mês e não entram de novo no próximo disparo.</span></div>`:''}
+      ${(n=>n.length?`<div class="bolaguarda">Já disparados em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}): ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}<button type="button" data-voltar="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.disp))}
       ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLabel(refMes).toLowerCase())} não aparecem aqui: ${esc(lista.filter(b=>!b.gerar).map(b=>b.r.cliente).join(', '))}.</div>`:''}
       <div class="sec">1. Texto para gerar os boletos (Claude in Chrome no Sicredi)</div>
       <p class="sub" style="margin:0;font-size:12px">Para salvar cada PDF com o nome certo, ative no Chrome: Configurações → Downloads → Perguntar onde salvar cada arquivo.</p>
@@ -1525,6 +1531,18 @@ function openBoletos(){
       `<span></span><div style="display:flex;gap:8px"><button class="btn" id="bolFechar" type="button">Fechar</button></div>`);
     painelVivo=draw;
     $('#bolFechar').onclick=closeDrawer;
+    const marcarDisparo=async(lista2,dentro,msg)=>{
+      if(!canWrite){toast('Você só tem acesso de leitura.');return}
+      const antes=lista2.map(r=>({id:r.id,antes:copia(r)}));
+      const novos=new Map(lista2.map(r=>{const st=new Set(lerJSON(r.disparoMeses)||[]);dentro?st.add(refMes):st.delete(refMes);const a=[...st].sort();return [r.id,{disparoMeses:a.length?JSON.stringify(a):null}]}));
+      lista2.forEach(r=>Object.assign(r,novos.get(r.id))); draw();
+      try{await writeMany(lista2.map(r=>[r.id,novos.get(r.id)]));lista2.forEach(r=>{const a=rows.find(x=>x.id===r.id);if(a)Object.assign(a,novos.get(r.id))});draw();oferecerDesfazer(msg,antes)}
+      catch(e){handleWriteErr(e)}
+    };
+    if($('#bolDisparado')) $('#bolDisparado').onclick=()=>{const b=$('#bolDisparado');
+      if(b.dataset.armed!=='1'){b.dataset.armed='1';b.classList.add('armed');b.textContent=`Confirmar: ${prontos.length} disparados?`;setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.classList.remove('armed');b.textContent=`Marcar estes ${prontos.length} como disparados`}},4000);return}
+      marcarDisparo(prontos.map(x=>x.r),true,`${prontos.length} cliente(s) marcados como disparados em ${mesLabel(refMes).toLowerCase()}`)};
+    document.querySelectorAll('[data-voltar]').forEach(x=>x.onclick=()=>{const r=rows.find(y=>y.id===x.dataset.voltar);if(r)marcarDisparo([r],false,`${r.cliente} voltou para a lista de disparo`)});
     const copiar=(sel,msg)=>{const t=$(sel).value;const fb=()=>{const el=$(sel);el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
       try{navigator.clipboard.writeText(t).then(()=>toast(msg),fb)}catch(e){fb()}};
     $('#bolCopiar').onclick=()=>copiar('#bolTexto','Texto 1 copiado. Cole no Claude in Chrome com o Sicredi aberto.');
