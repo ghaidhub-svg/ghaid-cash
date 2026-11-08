@@ -1302,7 +1302,7 @@ function boletosDoMes(){
     if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
     const partes=partesBoleto(r,div,total);
     if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'vencimento (Dia de envio)');
-    const esp=ehEsporadico(r), gerar=!esp||(lerJSON(r.boletoMeses)||[]).includes(refMes);
+    const esp=ehEsporadico(r), gerar=okNoMes(r); // só entra no texto com OK no Status cobrança deste mês
     return {r,pag,total,div,partes,faltas,esp,gerar};
   }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
 }
@@ -1416,7 +1416,7 @@ function abrirPlano(id){
 function openBoletos(){
   if(ASSIST()) return;
   const draw=()=>{
-    const cfg=cfgBoleto(), lista=boletosDoMes(), prontos=lista.filter(vaiNoTexto), nEsp=lista.filter(b=>b.esp).length;
+    const cfg=cfgBoleto(), lista=boletosDoMes(), prontos=lista.filter(vaiNoTexto), nAguarda=lista.filter(b=>!b.gerar).length;
     const nBol=prontos.reduce((s,b)=>s+b.partes.length,0), soma=prontos.reduce((s,b)=>s+b.total,0);
     const card=b=>{
       const r=b.r, g=ehGrupo(r);
@@ -1425,13 +1425,13 @@ function openBoletos(){
         <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}${b.esp?' · esporádico':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
         ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de envio)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
-        ${b.esp?`<label class="boldiv"><input type="checkbox" data-gerar${b.gerar?' checked':''}> Gerar boleto neste mês</label>${b.gerar?'':'<div class="bolsub">Fora do texto do Claude in Chrome (por exemplo, pago por Pix).</div>'}`:''}
+        <label class="boldiv"><input type="checkbox" data-gerar${b.gerar?' checked':''}> OK, liberado para gerar boleto</label>${b.gerar?'':'<div class="bolsub">Aguardando OK no Status cobrança: fica fora do texto do Claude in Chrome.</div>'}
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
         <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) pronto(s), somando ${brl.format(soma)}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de envio, neste mês.${nEsp?` ${nEsp} esporádico(s) com atendimento neste mês: marque os que vão por boleto.`:''}</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) liberado(s), somando ${brl.format(soma)}. Só entra no texto quem está com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de envio.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
@@ -1449,12 +1449,8 @@ function openBoletos(){
     document.querySelectorAll('.bol').forEach(el=>{
       const id=el.dataset.id;
       el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
-      el.querySelector('[data-gerar]')?.addEventListener('change',async e=>{
-        const r=rows.find(x=>x.id===id); if(!r) return;
-        const meses=new Set(lerJSON(r.boletoMeses)||[]); e.target.checked?meses.add(refMes):meses.delete(refMes);
-        const v=meses.size?JSON.stringify([...meses].sort()):null;
-        await setCampo(id,'boletoMeses',v,e.target.checked?`${r.cliente}: vai gerar boleto neste mês`:`${r.cliente}: sem boleto neste mês`);
-        const a=rows.find(x=>x.id===id); if(a) a.boletoMeses=v; draw();
+      el.querySelector('[data-gerar]')?.addEventListener('change',async e=>{ // é o mesmo OK da coluna Status cobrança
+        await setOk(id,{key:'status'},e.target.checked?'OK':null); draw();
       });
       el.querySelector('[data-pagador]')?.addEventListener('change',e=>{const v=e.target.value;setCampo(id,'pagadorId',v,'Pagador do grupo salvo').then(()=>{const a=rows.find(x=>x.id===id);if(a)a.pagadorId=v;draw()})});
     });
