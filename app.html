@@ -208,6 +208,8 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub{color:var(--muted)}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
+.bolconf{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--alert-text);border:1px dashed var(--alert-text);border-radius:var(--r);padding:6px 8px}
+.bolconf .mini{white-space:nowrap;padding:0 8px;width:auto;font-size:12px}
 .bolitens{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
 .bolitens div{display:flex;justify-content:space-between;gap:10px}
 .bolitt{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
@@ -1353,6 +1355,20 @@ function pagadorDe(r){
   return cs.find(c=>c.id===String(r.pagadorId||''))||cs.find(c=>valido(c.razao)&&valido(c.doc))||cs[0]||r;
 }
 const r2=n=>Math.round(n*100)/100;
+/* CNPJ/CPF com dígitos verificadores certos (pega erro de digitação antes de ir para o banco) */
+function docValido(v){
+  const d=String(v||'').replace(/\D/g,'');
+  if(d.length===11){if(/^(\d)\1+$/.test(d))return false;const dv=n=>{let s=0;for(let i=0;i<n;i++)s+=+d[i]*(n+1-i);const r=s*10%11;return r===10?0:r};return dv(9)===+d[9]&&dv(10)===+d[10]}
+  if(d.length===14){if(/^(\d)\1+$/.test(d))return false;const dv=n=>{const w=n===12?[5,4,3,2,9,8,7,6,5,4,3,2]:[6,5,4,3,2,9,8,7,6,5,4,3,2];const s=w.reduce((t,x,i)=>t+x*d[i],0)%11;return s<2?0:11-s};return dv(12)===+d[12]&&dv(13)===+d[13]}
+  return false;
+}
+/* pontos para conferir antes de gerar (não bloqueiam): cadastro importado como provável e valor diferente do último boleto */
+function conferirBoleto(b){
+  const r=b.r, L=[];
+  if(String(r.vinculo||'').trim().toLowerCase()==='provável') L.push({txt:'Razão social e CNPJ vieram da importação como "provável". Confira no contrato.',acao:'vinculo'});
+  if(isNum(r.valorBoleto)&&isNum(b.total)&&Math.abs(r.valorBoleto-b.total)>0.009) L.push({txt:`O último boleto registrado foi de ${brl.format(r.valorBoleto)}. Este sai com ${brl.format(b.total)}.`,acao:'valor'});
+  return L;
+}
 function partesBoleto(r,div,total){
   const vPadrao=isoNoMes(r.diaEnvio);
   if(!div||!isNum(total)||total<=0) return [{valor:total,venc:vPadrao,rotulo:''}];
@@ -1371,6 +1387,7 @@ function boletosDoMes(){
     const total=tm(r), pag=pagadorDe(r), div=lerJSON(r.boleto2), faltas=[];
     if(!valido(pag.razao)) faltas.push('razão social');
     if(!valido(pag.doc)) faltas.push('CNPJ/CPF');
+    else if(!docValido(pag.doc)) faltas.push('CNPJ/CPF com número errado');
     if(!isNum(total)||total<=0) faltas.push('valor');
     if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
     const partes=partesBoleto(r,div,total);
@@ -1578,6 +1595,7 @@ function openBoletos(){
         <div class="bolsub${emailDe(b)||whatsDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'<span class="bolsememail">sem e-mail</span>'} · ${whatsDe(b)?`WhatsApp ${esc(whatsDe(b))}`:'<span class="bolsememail">sem WhatsApp</span>'}</div>
         ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de vencimento)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
         ${(it=>it.length?`<div class="bolitens"><span class="bolitt">${ehEsporadico(r)?'Serviços do mês':'Adicionais do mês'}</span>${it.map(i=>{const st=sitDe(i);return `<div><span>${esc(i.desc||'Item')}</span><span>${st?SIT_TEXTO[st]:isNum(i.valor)?brl.format(i.valor):'sem preço'}</span></div>`}).join('')}</div>`:'')(itemsOf(r))}
+        ${conferirBoleto(b).map(c=>`<div class="bolconf"><span>${esc(c.txt)}</span><button class="mini" type="button" data-conf="${c.acao}" title="Marcar como conferido" aria-label="Marcar como conferido">Conferido</button></div>`).join('')}
         <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
         <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
@@ -1586,6 +1604,7 @@ function openBoletos(){
     shell('Boletos do mês',`
       <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) com OK para disparar, somando ${brl.format(soma)}. Aqui aparecem os clientes com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} sem OK na coluna)`:''}. Confira, decida a forma de pagamento e marque <strong>OK para disparar</strong> em quem vai neste disparo: só esses entram nos textos. Não pagantes, contas de grupo e arquivados ficam de fora. Os valores são de ${esc(mesLabel(refMes).toLowerCase())} e o vencimento fica em <strong>${esc(mesLabel(mesVenc()).toLowerCase())}</strong>, no dia da coluna Dia de vencimento.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
+      ${(n=>n?`<div class="bolaguarda">${n} cobrança(s) com algo para conferir (aviso tracejado no cartão). Confira e clique em Conferido.</div>`:'')(lista.filter(b=>b.gerar&&!b.disp&&conferirBoleto(b).length).length)}
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.filter(b=>b.gerar&&!b.disp).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
       ${prontos.length?`<div class="bollote"><button class="btn" type="button" id="bolDisparado">Marcar estes ${prontos.length} como disparados</button><span>Use depois de gerar e enviar. Eles saem da lista deste mês e não entram de novo no próximo disparo.</span></div>`:''}
@@ -1644,6 +1663,12 @@ function openBoletos(){
     document.querySelectorAll('.bol').forEach(el=>{
       const id=el.dataset.id;
       el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
+      el.querySelectorAll('[data-conf]').forEach(btn=>btn.onclick=async()=>{ // conferido: vínculo vira Confirmado; valor: o último boleto passa a ser o deste mês
+        const r=rows.find(x=>x.id===id); if(!r) return;
+        if(btn.dataset.conf==='vinculo'){await setCampo(id,'vinculo','Confirmado',`${r.cliente}: cadastro conferido`);const a=rows.find(x=>x.id===id);if(a)a.vinculo='Confirmado'}
+        else{const t=tm(r);await setCampo(id,'valorBoleto',isNum(t)?t:null,`${r.cliente}: valor conferido`);const a=rows.find(x=>x.id===id);if(a)a.valorBoleto=isNum(t)?t:null}
+        draw();
+      });
       el.querySelector('[data-incluir]')?.addEventListener('change',async e=>{ // OK de dentro do painel: entra neste disparo
         const r=rows.find(x=>x.id===id); if(!r) return;
         const st=new Set(lerJSON(r.liberadoMeses)||[]); e.target.checked?st.add(refMes):st.delete(refMes);
