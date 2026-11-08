@@ -1386,7 +1386,9 @@ const PASTA_BOLETOS=()=>`Documentos/Boletos GHAID/${refMes}`;
 /* contas que fazem o envio (financeiro): ficam na config, valem para todos os meses */
 const envioCfg=()=>({email:(cfgFlags.envio&&cfgFlags.envio.email)||'',whats:(cfgFlags.envio&&cfgFlags.envio.whats)||''});
 const whatsDigitos=w=>{const d=String(String(w||'').split(/[,;\/]| e /)[0]).replace(/\D/g,'');return d?(d.startsWith('55')&&d.length>=12?d:'55'+d.replace(/^0+/,'')):''};
-const nomeArquivo=(b,i)=>`${refMes} ${String(b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${b.partes.length>1?` boleto ${i+1} de ${b.partes.length}`:''}.pdf`;
+// o Sicredi baixa o PDF como "Boleto-" + nome do pagador; o 2º do mesmo pagador ganha " (1)"
+const nomeArquivo=(b,i)=>`Boleto-${String(b.pag.razao||b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${i>0?` (${i})`:''}.pdf`;
+const autoEnvio=()=>!!cfgFlags.autoEnvio;
 const emailDe=b=>valido(b.r.email)?b.r.email:(valido(b.pag.email)?b.pag.email:null);
 const whatsDe=b=>valido(b.r.whatsapp)?b.r.whatsapp:(valido(b.pag.whatsapp)?b.pag.whatsapp:null);
 const EMAIL_FIM_PADRAO='Qualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe GHAID';
@@ -1409,7 +1411,9 @@ function textoEmails(lista){
     de?`Envie pelo Gmail da conta ${de} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${de}, troque para ela ou pare e me avise. Não envie por outra conta.`
       :'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual conta enviar e não envie por nenhuma outra.',
     'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'.',
-    'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
+    'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
+    autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada e-mail. Pule (sem enviar) só quem tiver PDF não encontrado ou dúvida sobre o arquivo certo. No final, me mostre o resumo: enviados e pulados, com o motivo.'
+      :'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
   comEmail.forEach((b,n)=>{
     L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Para: ${emailDe(b)}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`,
       `Anexar: ${b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ')}`,'Texto:',corpoEmail(b),'');
@@ -1423,7 +1427,9 @@ function textoWhats(lista){
     de?`Envie pelo WhatsApp Web conectado no número ${de} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado (Configurações → perfil): se não for ${de}, pare e me avise. Não envie por outro número.`
       :'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual número enviar e não envie por nenhum outro.',
     'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+'.',
-    'Antes de enviar cada mensagem, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule esse cliente.',''];
+    'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
+    autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada mensagem. Pule só quem tiver PDF não encontrado, dúvida sobre o arquivo certo ou número sem WhatsApp. No final, me mostre o resumo: enviados e pulados, com o motivo.'
+      :'Antes de enviar cada mensagem, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule esse cliente.',''];
   com.forEach((b,n)=>{
     L.push(`--- ${n+1}. ${b.r.cliente} ---`,`WhatsApp: ${whatsDe(b)} · abrir: https://web.whatsapp.com/send?phone=${whatsDigitos(whatsDe(b))}`,
       `Anexar: ${b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ')}`,'Mensagem:',corpoEmail(b),'');
@@ -1437,13 +1443,17 @@ function textoBoletos(lista){
     'Espécie do documento: DSI (Duplicata de Serviço por Indicação)',
     `Número do documento: o indicado em cada linha (mês + sequência, ex.: ${refMes.replace('-','')}-01). Não reutilize números já usados neste mês.`,'',
     'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
-    'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',
-    `Depois de emitir cada boleto, baixe o PDF. O Chrome já está configurado para baixar direto na pasta ${PASTA_BOLETOS()}, sem perguntar onde salvar. Se der para escolher o nome, use o indicado na linha. Se não der, anote o nome com que cada arquivo foi baixado e, no final, me mostre a lista: cliente → nome do arquivo (e boleto 1 ou 2, se for dividido). Essa lista será usada nos envios por e-mail e WhatsApp.`,''];
+    autoEnvio()?'Emita todos em sequência, sem me pedir confirmação a cada boleto. Pare e me pergunte só se: o pagador não estiver cadastrado no banco; houver mais de um cadastro para o mesmo CNPJ/CPF e você não souber qual usar; ou o banco mostrar dados diferentes dos da linha. No final, me mostre o resumo: emitidos, pulados e o motivo.'
+      :'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar.',
+    'Não faça pagamentos nem transferências.',
+    'O pagador é identificado pelo CNPJ/CPF. Se ele estiver cadastrado no banco com um nome mais curto, mas com o mesmo CNPJ/CPF, use esse cadastro normalmente.',
+    'Se o banco der erro (ex.: sistema indisponível), confira se o boleto não foi criado antes de tentar de novo, para não emitir em dobro.',
+    `Depois de emitir cada boleto, baixe o PDF. O Chrome já está configurado para baixar direto na pasta ${PASTA_BOLETOS()}, sem perguntar onde salvar. O Sicredi salva como "Boleto-" + nome do pagador no banco (arquivo esperado indicado na linha). Anote o nome com que cada arquivo foi baixado e, no final, me mostre a lista: cliente → nome do arquivo (e boleto 1 ou 2, se for dividido). Essa lista será usada nos envios por e-mail e WhatsApp.`,''];
   // numeração do mês: continua depois dos boletos dos lotes já disparados, para não repetir número
   let n=0, nDoc=lista.filter(b=>b.disp).reduce((t,b)=>t+b.partes.length,0);
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
     const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
-    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · salvar como: ${nomeArquivo(b,i)}`)}));
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
   const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
@@ -1582,6 +1592,8 @@ function openBoletos(){
       ${(n=>n.length?`<div class="bolaguarda">Já disparados em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}): ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}<button type="button" data-voltar="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.disp))}
       ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLabel(refMes).toLowerCase())} não aparecem aqui: ${esc(lista.filter(b=>!b.gerar).map(b=>b.r.cliente).join(', '))}.</div>`:''}
       <div class="sec">Envio pelo financeiro</div>
+      <label class="boldiv bolok"><input type="checkbox" id="bAuto"${autoEnvio()?' checked':''}> Claude segue sozinho, sem pedir confirmação a cada boleto e mensagem</label>
+      <p class="sub" style="margin:0;font-size:12px">Ele só para se algo não bater (pagador sem cadastro, dados diferentes, PDF não encontrado) e mostra um resumo no final. Deixe desmarcado se quiser conferir um por um.</p>
       <div class="bolcfg"><div class="field"><label for="bDeEmail">E-mail que envia</label><input id="bDeEmail" type="email" placeholder="financeiro@..." value="${esc(envioCfg().email)}"></div><div class="field"><label for="bDeWhats">WhatsApp que envia</label><input id="bDeWhats" inputmode="tel" placeholder="51 99999-9999" value="${esc(envioCfg().whats)}"></div></div>
       <div class="sec">1. Texto para gerar os boletos (Claude in Chrome no Sicredi)</div>
       <p class="sub" style="margin:0;font-size:12px">Os PDFs vão para <strong>${esc(PASTA_BOLETOS())}</strong>. Antes de colar: crie essa pasta e, no Chrome (chrome://settings/downloads), mude o Local para ela, com "Perguntar onde salvar" desligado.</p>
@@ -1622,6 +1634,7 @@ function openBoletos(){
       cfgFlags={...cfgFlags,envio:{email:em||'',whats:wn||''}};saveCols();
       if(wn) $('#bDeWhats').value=wn;
       $('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Contas de envio salvas')};
+    $('#bAuto').onchange=e=>{cfgFlags={...cfgFlags,autoEnvio:e.target.checked};saveCols();const l=boletosDoMes();$('#bolTexto').value=textoBoletos(l);$('#bolEmails').value=textoEmails(l);$('#bolWhats').value=textoWhats(l);toast(e.target.checked?'Claude vai seguir sozinho nos textos 1, 2 e 3':'Claude vai pedir confirmação a cada um')};
     $('#bDeEmail').onchange=salvarEnvio; $('#bDeWhats').onchange=salvarEnvio;
     $('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Saudação final salva')};
     const salvarCfg=()=>{cfgFlags={...cfgFlags,boleto:{juros:$('#bJuros').value.trim()||BOLETO_PADRAO.juros,multa:$('#bMulta').value.trim()||BOLETO_PADRAO.multa}};saveCols();$('#bolTexto').value=textoBoletos(boletosDoMes());toast('Juros e multa salvos')};
