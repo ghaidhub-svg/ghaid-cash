@@ -505,6 +505,7 @@ const DEFAULT_COLS=[
  {key:'razao',label:'Razão social',type:'text',required:true},
  {key:'doc',label:'CNPJ / CPF',type:'mono',required:true},
  {key:'endereco',label:'Endereço (cadastro no banco)',type:'text',off:true},
+ {key:'nomeBanco',label:'Nome no banco (se diferente da razão social)',type:'text',off:true},
  {key:'publicacoes',label:'Publicações',type:'text',required:true},
  {key:'valorMensal',label:'Valor do plano',type:'money',required:true},
  {key:'adicionais',label:'Adicionais do mês',type:'calc',items:true},
@@ -662,7 +663,7 @@ const SEM_COB_TIPOS=['parceria','permuta','filantropia','pagoporoutro'];
 const semCobranca=r=>!!r&&SEM_COB_TIPOS.includes(String(r.tipo||'').trim().toLowerCase());
 /* esporádico: sem plano, paga só os adicionais do mês (a assistente recebe só o aviso esporadico=true) */
 const ehEsporadico=r=>!!r&&(String(r.tipo||'').trim().toLowerCase()==='esporadico'||r.esporadico===true);
-const SEM_COB_COLS=['diaEnvio','email','whatsapp','vencimento','endereco'];
+const SEM_COB_COLS=['diaEnvio','email','whatsapp','vencimento','endereco','nomeBanco'];
 /* não pagante: só nome, tipo, publicações, adicionais e observações ficam ativos; o resto fica vazio (os dados não são apagados) */
 const ATIVOS_SEM_COB=['cliente','tipo','publicacoes','adicionais','obs'];
 /* ---------- grupos: várias contas pagas por uma mensalidade só ----------
@@ -1421,6 +1422,8 @@ const soDig=v=>String(v||'').replace(/\D/g,'');
 function conferirBoleto(b){
   const r=b.r, L=[];
   if(String(r.vinculo||'').trim().toLowerCase()==='provável') L.push({txt:'Razão social e CNPJ vieram da importação como "provável". Confira no contrato.',acao:'vinculo'});
+  const zero=itemsOf(r).filter(i=>!sitDe(i)&&isNum(i.valor)&&i.valor===0);
+  if(zero.length) L.push({txt:`Adicional com R$ 0,00: ${zero.map(i=>i.desc||'item').join('; ')}. Coloque o preço ou marque Cortesia, No contrato ou Já pago.`,acao:'zero'});
   const nf=notaDoMes(r), bruto=tm(r);
   if(nf&&isNum(bruto)&&Math.abs(nf.bruto-bruto)>0.009&&Math.abs(nf.bruto-(bruto+permutaNoMes(r)))>0.009) L.push({txt:`A nota é de ${brl.format(nf.bruto)}, mas plano + adicionais do mês dá ${brl.format(bruto)}. O boleto segue a nota.`,acao:'nota'});
   if(nf&&nf.cnpj&&soDig(nf.cnpj)!==soDig(b.pag.doc)) L.push({txt:`A nota está no CNPJ/CPF ${nf.cnpj}, diferente do pagador (${b.pag.doc||'sem CNPJ'}).`,acao:'nota'});
@@ -1462,7 +1465,8 @@ const PASTA_BOLETOS=()=>`Documentos/Boletos GHAID/${refMes}`;
 const envioCfg=()=>({email:(cfgFlags.envio&&cfgFlags.envio.email)||'',whats:(cfgFlags.envio&&cfgFlags.envio.whats)||''});
 const whatsDigitos=w=>{const d=String(String(w||'').split(/[,;\/]| e /)[0]).replace(/\D/g,'');return d?(d.startsWith('55')&&d.length>=12?d:'55'+d.replace(/^0+/,'')):''};
 // o Sicredi baixa o PDF como "Boleto-" + nome do pagador; o 2º do mesmo pagador ganha " (1)"
-const nomeArquivo=(b,i)=>`Boleto-${String(b.pag.razao||b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${i>0?` (${i})`:''}.pdf`;
+const nomeBancoDe=pag=>valido(pag.nomeBanco)?String(pag.nomeBanco).trim():String(pag.razao||pag.cliente||'cliente').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim().slice(0,40).trim();
+const nomeArquivo=(b,i)=>`Boleto-${nomeBancoDe(b.pag).replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${i>0?` (${i})`:''}.pdf`;
 const autoEnvio=()=>!!cfgFlags.autoEnvio;
 /* número do documento: começa depois dos boletos já disparados no mês, ou no "próximo nº" escolhido no painel (o que for maior) */
 const docInicio=lista=>Math.max(lista.filter(b=>b.disp).reduce((t,b)=>t+b.partes.length,0)+1,+((cfgFlags.docProx||{})[refMes])||1);
@@ -1529,6 +1533,10 @@ function textoBoletos(lista){
     autoEnvio()?'Emita todos em sequência, sem me pedir confirmação a cada boleto. Pare e me pergunte só se: o pagador não estiver cadastrado no banco e a linha não tiver endereço; houver mais de um cadastro para o mesmo CNPJ/CPF e você não souber qual usar; ou o banco mostrar dados diferentes dos da linha. No final, me mostre o resumo: emitidos, pulados e o motivo.'
       :'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar.',
     'Não faça pagamentos nem transferências.',
+    'Baixe o PDF de cada boleto uma vez só, pelo botão "Salvar boleto em PDF". Não use "imprimir". Se o botão não aparecer, use Emitir Boletos e salve o PDF uma vez.',
+    'Se houver mais de um cadastro de pagador para o mesmo CNPJ/CPF, use o que tiver o endereço completo e sem texto repetido, e cite isso no resumo final.',
+    'Ao cadastrar pagador novo: nome e endereço têm no máximo 40 caracteres no banco; abrevie mantendo o começo da razão social, e coloque o bairro no endereço.',
+    'Se a extensão cair ou a página recarregar no meio de um boleto, antes de refazer confira na consulta se ele já foi criado.',
     'O pagador é identificado pelo CNPJ/CPF. Se ele estiver cadastrado no banco com um nome mais curto, mas com o mesmo CNPJ/CPF, use esse cadastro normalmente.',
     'Se o banco der erro (ex.: sistema indisponível), confira se o boleto não foi criado antes de tentar de novo, para não emitir em dobro.',
     `Depois de emitir cada boleto, baixe o PDF. O Chrome já está configurado para baixar direto na pasta ${PASTA_BOLETOS()}, sem perguntar onde salvar. O Sicredi salva como "Boleto-" + nome do pagador no banco (arquivo esperado indicado na linha). Anote o nome com que cada arquivo foi baixado e, no final, me mostre a lista: cliente → nome do arquivo (e boleto 1 ou 2, se for dividido). Essa lista será usada nos envios por e-mail e WhatsApp.`,''];
@@ -1536,7 +1544,7 @@ function textoBoletos(lista){
   let n=0, nDoc=docInicio(lista)-1;
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
     const nf=notaDoMes(b.r), extra=(b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'')+(nf?` · valor pela NFS-e${nf.num?` nº ${nf.num}`:''}${nf.iss>0?' (líquido, ISS retido pelo cliente)':''}`:'');
-    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente})${valido(b.pag.endereco)?` · endereço: ${b.pag.endereco}`:''} · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}${nomeBancoDe(b.pag)!==String(b.pag.razao||'').trim()?` · no banco: ${nomeBancoDe(b.pag)}`:''})${valido(b.pag.endereco)?` · endereço: ${b.pag.endereco}`:''} · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
   const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
@@ -1799,6 +1807,7 @@ function openBoletos(){
         await setCampo(id,'notasMeses',v,`${r.cliente}: nota de ${mesLabel(refMes).toLowerCase()} removida`);const a=rows.find(x=>x.id===id);if(a)a.notasMeses=v;draw()});
       el.querySelectorAll('[data-conf]').forEach(btn=>btn.onclick=async()=>{ // conferido: vínculo vira Confirmado; valor: o último boleto passa a ser o deste mês
         const r=rows.find(x=>x.id===id); if(!r) return;
+        if(btn.dataset.conf==='zero'){openItems(id);return}
         if(btn.dataset.conf==='nota'){toast('Se a nota estiver errada, use Trocar ou Remover na linha da nota.');return}
         if(btn.dataset.conf==='vinculo'){await setCampo(id,'vinculo','Confirmado',`${r.cliente}: cadastro conferido`);const a=rows.find(x=>x.id===id);if(a)a.vinculo='Confirmado'}
         else{const t=tm(r);await setCampo(id,'valorBoleto',isNum(t)?t:null,`${r.cliente}: valor conferido`);const a=rows.find(x=>x.id===id);if(a)a.valorBoleto=isNum(t)?t:null}
