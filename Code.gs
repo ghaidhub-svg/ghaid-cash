@@ -6,7 +6,7 @@
 var PASTA_ID = '1OYS1_92L9cEAbVHHv9dmFuONzd-VZDiH'; // pasta "GHAID Cash" no Drive
 var APP_HTML = 'app.html';
 var SEED = 'dados-iniciais.json';
-var NUMEROS = ['valorMensal', 'valorNF', 'valorBoleto', 'issRetido'];
+var NUMEROS = ['valorMensal', 'valorPermuta', 'valorNF', 'valorBoleto', 'issRetido'];
 var CAB_ADIC = ['id', 'clienteId', 'cliente', 'mes', 'descricao', 'valor'];
 
 // A tela vem do GitHub (atualiza sozinha a cada publicação). Se o GitHub falhar, usa a cópia do Drive.

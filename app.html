@@ -316,6 +316,8 @@ td.items .c{cursor:pointer;color:var(--fg);font-weight:600}
 td.items .c.empty{color:var(--muted);font-weight:500;font-size:12px}
 td.items .c.visto{color:var(--good)}
 td.items .c.sempreco,td.items .c.sempreco .cnt{color:var(--alert-text)}
+td.temperm .c{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+td.temperm .perm{font-size:11px;font-weight:500;color:var(--muted)}
 td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
 .itrow{display:grid;grid-template-columns:minmax(0,1fr) 120px 32px;gap:8px;align-items:center}
 .itrow input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0;width:100%}
@@ -515,6 +517,12 @@ function planoNoMes(r,m=refMes){
   let v=h[0].valor; for(const e of h) if(e.desde<=m) v=e.valor; return v;
 }
 const planoValor=(r,m)=>{const v=planoNoMes(r,m);return isNum(v)?v:0};
+/* parte do plano paga em permuta (cliente pagante com parte em permuta). Não entra no boleto nem no total cobrado. */
+function permutaNoMes(r,m=refMes){
+  const h=planoHist(r);
+  if(h.some(e=>'permuta' in e)){let v=0;for(const e of h) if(e.desde<=m) v=isNum(e.permuta)?e.permuta:0;return v}
+  const v=r?Number(r.valorPermuta):0; return r&&!isEmpty(r.valorPermuta)&&isFinite(v)?v:0;
+}
 const valorDe=(c,r)=>c.key==='valorMensal'?planoNoMes(r):r[c.key];
 function mesLabel(m){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1)}
 function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1+d,1);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`}
@@ -808,6 +816,8 @@ function render(){
         const semP=it.filter(i=>!sitDe(i)&&!isNum(i.valor)).length, visto=it.length>0&&!semP;
         return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}${visto?' visto':''}${semP?' sempreco':''}" title="${esc(it.map(i=>i.desc+': '+(sitDe(i)?SIT_TEXTO[sitDe(i)]:isNum(i.valor)?brl.format(i.valor):'sem preço')).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}${semP?` · ${semP} sem preço`:''}</span>`:'+ adicionar'}</div></td>`}
       if(ehIsento(r[c.key])) extra+=' isento';
+      if(c.key==='valorMensal'&&!ASSIST()&&permutaNoMes(r)>0){const pm=permutaNoMes(r),pl=planoValor(r);
+        return `<td class="${cls} temperm" data-k="${c.key}"><div class="c${extra}" data-tip="<strong>Plano com permuta</strong>Boleto: ${esc(brl.format(pl))} · Permuta: ${esc(brl.format(pm))} · Total do plano: ${esc(brl.format(pl+pm))}">${miss?'?':esc(txt)}<span class="perm">+ ${esc(brl.format(pm))} permuta</span></div></td>`}
       return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(miss?'Falta preencher':txt)}">${miss?'?':esc(txt)}</div>${seta}</td>`;
     }).join('')+'</tr>';
   }).join('');
@@ -1457,19 +1467,23 @@ function abrirDivisao(id,aoSalvar){
 function abrirPlano(id){
   if(!canWrite){toast('Você só tem acesso de leitura.');return}
   const r=rows.find(x=>x.id===id); if(!r) return;
-  const atual=planoNoMes(r), h=planoHist(r);
+  const atual=planoNoMes(r), h=planoHist(r), pmAtual=permutaNoMes(r);
+  const temPm=h.some(e=>'permuta' in e);
+  const pmTxt=e=>{const pm=temPm?(isNum(e.permuta)?e.permuta:0):permutaNoMes({valorPermuta:r.valorPermuta});return pm>0?` + ${brl.format(pm)} permuta`:''};
   const nome=e=>e.desde===PLANO_BASE?'Até então':`Desde ${mesLabel(e.desde).toLowerCase()}`;
-  const linhas=h.length?h.slice().reverse().map(e=>`<div><span>${esc(nome(e))}</span><span>${isNum(e.valor)?brl.format(e.valor):'sem valor'}${e.desde!==PLANO_BASE?` <button class="mini" type="button" data-rmdesde="${e.desde}" aria-label="Apagar o registro ${esc(nome(e))}" title="Apagar este registro">×</button>`:''}</span></div>`).join('')
-    :`<div><span>Desde o início</span><span>${isNum(r.valorMensal)?brl.format(r.valorMensal):'sem valor'}</span></div>`;
+  const linhas=h.length?h.slice().reverse().map(e=>`<div><span>${esc(nome(e))}</span><span>${isNum(e.valor)?brl.format(e.valor):'sem valor'}${esc(pmTxt(e))}${e.desde!==PLANO_BASE?` <button class="mini" type="button" data-rmdesde="${e.desde}" aria-label="Apagar o registro ${esc(nome(e))}" title="Apagar este registro">×</button>`:''}</span></div>`).join('')
+    :`<div><span>Desde o início</span><span>${isNum(r.valorMensal)?brl.format(r.valorMensal):'sem valor'}${esc(pmTxt({}))}</span></div>`;
   fecharDivisao();
   const scrim=document.createElement('div'); scrim.className='modalscrim'; scrim.onclick=fecharDivisao;
   const m=document.createElement('div'); m.className='modal'; m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-label','Valor do plano');
   m.innerHTML=`<h3>Valor do plano</h3>
-    <p class="sub" style="margin:0;font-size:13px">${esc(r.cliente||'')} · em ${esc(mesLabel(refMes).toLowerCase())}: ${isNum(atual)?brl.format(atual):'sem valor'}</p>
+    <p class="sub" style="margin:0;font-size:13px">${esc(r.cliente||'')} · em ${esc(mesLabel(refMes).toLowerCase())}: ${isNum(atual)?brl.format(atual):'sem valor'}${pmAtual>0?` + ${brl.format(pmAtual)} em permuta`:''}</p>
     <div class="dvdatas">
-      <div class="field"><label for="plValor">Novo valor</label><input id="plValor" inputmode="decimal" placeholder="0,00" value="${isNum(atual)?moedaTxt(atual):''}"></div>
+      <div class="field"><label for="plValor">No boleto</label><input id="plValor" inputmode="decimal" placeholder="0,00" value="${isNum(atual)?moedaTxt(atual):''}"></div>
+      <div class="field"><label for="plPerm">Em permuta</label><input id="plPerm" inputmode="decimal" placeholder="0,00 (sem permuta)" value="${pmAtual>0?moedaTxt(pmAtual):''}"></div>
       <div class="field"><label for="plDesde">Vale a partir de</label><input id="plDesde" type="month" value="${refMes}"></div>
     </div>
+    <p class="sub" id="plTotal" style="margin:0;font-size:13px"></p>
     <p class="sub" style="margin:0;font-size:12px">Os meses antes dessa data continuam com o valor anterior. Use para renovação ou mudança de plano.</p>
     <div class="sec">Linha do tempo do plano</div>
     <div class="dvprev plhist">${linhas}</div>
@@ -1477,7 +1491,8 @@ function abrirPlano(id){
   document.body.append(scrim,m);
   const gravar=async(nh,msg)=>{
     const antes=copia(r), vHoje=nh.length?planoNoMes({planoHist:nh},MES_HOJE):r.valorMensal;
-    const novo={planoHist:nh.length?JSON.stringify(nh):null,valorMensal:isNum(vHoje)?vHoje:null};
+    const pHoje=nh.length?permutaNoMes({planoHist:nh,valorPermuta:r.valorPermuta},MES_HOJE):r.valorPermuta;
+    const novo={planoHist:nh.length?JSON.stringify(nh):null,valorMensal:isNum(vHoje)?vHoje:null,valorPermuta:isNum(pHoje)&&pHoje>0?pHoje:null};
     Object.assign(r,novo); render();
     try{await writeDoc(id,novo,'update');const a=rows.find(x=>x.id===id);if(a)Object.assign(a,novo);render();oferecerDesfazer(msg,[{id,antes}])}catch(e){handleWriteErr(e)}
   };
@@ -1487,15 +1502,23 @@ function abrirPlano(id){
     const d=b.dataset.rmdesde, nh=h.filter(e=>e.desde!==d);
     fecharDivisao(); gravar(nh,`Registro de ${mesLabel(d).toLowerCase()} apagado`);
   });
+  const somaPl=()=>{const v=parseMoney($('#plValor').value), pm=parseMoney($('#plPerm').value);
+    $('#plTotal').innerHTML=isNum(pm)&&pm>0&&isNum(v)?`Valor total do plano: <strong>${brl.format(v+pm)}</strong> (${brl.format(v)} no boleto e ${brl.format(pm)} em permuta)`:'O boleto cobra só o valor em dinheiro. A permuta fica registrada e não entra no boleto.'};
+  $('#plValor').oninput=somaPl; $('#plPerm').oninput=somaPl; somaPl();
   $('#plSalvar').onclick=()=>{
-    const v=parseMoney($('#plValor').value), desde=$('#plDesde').value;
+    const v=parseMoney($('#plValor').value), desde=$('#plDesde').value, pmRaw=parseMoney($('#plPerm').value);
     if(v===null||isNaN(v)){toast('Digite o valor do plano. Use algo como 1.380,00.');$('#plValor').focus();return}
+    if(isNaN(pmRaw)||(isNum(pmRaw)&&pmRaw<0)){toast('Valor da permuta inválido. Use algo como 500,00 ou deixe vazio.');$('#plPerm').focus();return}
+    const pm=isNum(pmRaw)?pmRaw:0;
     if(!/^\d{4}-\d{2}$/.test(desde)){toast('Escolha o mês em que o valor começa a valer.');$('#plDesde').focus();return}
     let nh=h.slice();
     if(!nh.length&&isNum(r.valorMensal)) nh=[{desde:PLANO_BASE,valor:r.valorMensal}]; // valor de antes vale para o passado
-    if(!nh.length) nh=[{desde:PLANO_BASE,valor:v}]; // cliente sem valor: vale para todos os meses
-    else{nh=nh.filter(e=>e.desde!==desde);nh.push({desde,valor:v});nh.sort((a,b)=>a.desde<b.desde?-1:1)}
-    fecharDivisao(); gravar(nh,`${r.cliente}: ${brl.format(v)} a partir de ${mesLabel(desde).toLowerCase()}`);
+    // a permuta passa a ficar no histórico: os registros antigos guardam a permuta que valia antes
+    if(!temPm&&(pm>0||pmAtual>0)) nh=nh.map(e=>({...e,permuta:permutaNoMes({valorPermuta:r.valorPermuta})}));
+    const reg=pm>0||temPm||pmAtual>0?{desde,valor:v,permuta:pm}:{desde,valor:v};
+    if(!nh.length) nh=[{...reg,desde:PLANO_BASE}]; // cliente sem valor: vale para todos os meses
+    else{nh=nh.filter(e=>e.desde!==desde);nh.push(reg);nh.sort((a,b)=>a.desde<b.desde?-1:1)}
+    fecharDivisao(); gravar(nh,`${r.cliente}: ${brl.format(v)}${pm>0?` + ${brl.format(pm)} em permuta`:''} a partir de ${mesLabel(desde).toLowerCase()}`);
   };
   $('#plValor').focus(); $('#plValor').select();
 }
@@ -1843,7 +1866,7 @@ function openClient(id){
     if(c.type==='tipo'&&id&&ehGrupo(r)) return `<div class="field"><label>Grupo</label><div class="calcv">${contasDe(r).length} conta(s): ${esc(contasDe(r).map(x=>x.cliente).join(', ')||'nenhuma')}</div></div>`;
     if(c.type==='tipo'&&id&&ehConta(r)) return `<div class="field"><label>Grupo</label><div class="calcv">Conta do grupo ${esc(grupoDe(r).cliente||'')}</div></div>`;
     if(c.type==='tipo'&&ASSIST()) return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${esc(tipoLabel(r.tipo))}</div></div>`;
-    if(c.key==='valorMensal'&&id&&!ASSIST()){const v=planoNoMes(r);return `<div class="field${c.required&&isEmpty(v)?' miss':''}"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${isNum(v)?brl.format(v):esc(v??'sem valor')}</span><button class="btn" type="button" id="goPlano">Mudar valor do plano</button></div></div>`}
+    if(c.key==='valorMensal'&&id&&!ASSIST()){const v=planoNoMes(r);return `<div class="field${c.required&&isEmpty(v)?' miss':''}"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${isNum(v)?brl.format(v):esc(v??'sem valor')}${permutaNoMes(r)>0?` + ${brl.format(permutaNoMes(r))} em permuta`:''}</span><button class="btn" type="button" id="goPlano">Mudar valor do plano</button></div></div>`}
     if(c.key==='publicacoes') return `<div class="field"><label>${esc(c.label)}</label>${id?`<div style="display:flex;gap:10px;align-items:center"><span class="calcv">${esc(pubResumo(r)||'não definido')}</span><button class="btn" type="button" id="goPub">Editar publicações</button></div>`:'<div class="calcv">Defina depois de salvar o cliente.</div>'}</div>`;
     if(c.items&&id){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)} · ${esc(mesLabel(refMes))}</label><div style="display:flex;gap:10px;align-items:center"><span class="calcv">${ASSIST()?(itemsOf(r).length?itemsOf(r).length+' item(ns)':'nenhum'):v==null?'nenhum':brl.format(v)}</span><button class="btn" type="button" id="goItems">Editar adicionais</button></div></div>`}
     if(c.type==='calc'){const v=CALC[c.key](r);return `<div class="field"><label>${esc(c.label)}</label><div class="calcv">${v==null?'calculado automaticamente':brl.format(v)}</div></div>`}
