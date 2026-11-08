@@ -208,6 +208,8 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub{color:var(--muted)}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
+.bolsememail{color:var(--alert-text)}
+#bFim{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--fg);resize:vertical}
 .bolfalta{color:var(--alert-text);font-weight:600;font-size:12px}
 .bolbtn{height:32px;padding:0 12px;font-size:12px}
 .bolorig{color:var(--muted)}
@@ -438,7 +440,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 
   <div class="tools">
     <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Buscar cliente, CNPJ, contato…" aria-label="Buscar"></label>
+      <input id="q" type="search" placeholder="Buscar cliente, CNPJ, e-mail, WhatsApp…" aria-label="Buscar"></label>
     <div class="mesctl" role="group" aria-label="Mês de referência"><button class="mini" id="mPrev" type="button" aria-label="Mês anterior">‹</button><span id="mLabel"></span><button class="mini" id="mNext" type="button" aria-label="Próximo mês">›</button></div>
     <div class="chips" role="group" aria-label="Filtro">
       <button class="chip" data-f="todos" aria-pressed="false">Todos</button>
@@ -482,7 +484,8 @@ const DEFAULT_COLS=[
  {key:'adicionais',label:'Adicionais do mês',type:'calc',items:true},
  {key:'totalMes',label:'Total do mês',type:'calc',strong:true},
  {key:'diaEnvio',label:'Dia de envio',type:'text',required:true},
- {key:'contato',label:'Contato p/ boleto',type:'text',required:true},
+ {key:'email',label:'E-mail p/ boleto',type:'email',required:true},
+ {key:'whatsapp',label:'WhatsApp',type:'whats'},
  {key:'valorNF',label:'Nota fiscal',type:'money'},
  {key:'obs',label:'Observações',type:'long',off:true},
  {key:'status',label:'Status cobrança',type:'ok',required:true},
@@ -560,6 +563,31 @@ const okDe=(c,r)=>c.key==='status'?okNoMes(r):isOk(r[c.key]);
       na importação e fica só com as anotações da equipe (as que vieram do status). */
 let statusMigrado=false, cfgLoaded=false, cfgFlags={};
 const frase=t=>{t=String(t).replace(/\s+/g,' ').trim();return t?t.charAt(0).toUpperCase()+t.slice(1).toLowerCase():''};
+/* uma vez só (marca contatoSeparado na config): o contato antigo vira E-mail e WhatsApp */
+let contatoMigrado=false;
+async function migrarContato(){
+  if(contatoMigrado||!canWrite||!cfgLoaded||!loaded||ASSIST()||cfgFlags.contatoSeparado) return; contatoMigrado=true;
+  const mud=[];
+  rows.forEach(r=>{
+    const c=String(r.contato??'').trim(); if(!c||!isEmpty(r.email)||!isEmpty(r.whatsapp)) return;
+    const novo={};
+    if(ehIsento(c)) novo.email=ISENTO;
+    else{
+      const em=c.match(/[^\s@,;<>()]+@[^\s@,;<>()]+\.[^\s@,;<>()]+/g);
+      if(em) novo.email=em.map(x=>x.toLowerCase()).join(', ');
+      const resto=em?em.reduce((t,x)=>t.replace(x,' '),c):c, w=normWhats(resto);
+      if(w&&!w.err) novo.whatsapp=w;
+    }
+    if(Object.keys(novo).length) mud.push([r,novo]);
+  });
+  try{
+    cfgFlags={...cfgFlags,contatoSeparado:new Date().toISOString()}; await saveCols();
+    if(!mud.length) return;
+    mud.forEach(([r,n])=>Object.assign(r,n)); render();
+    await writeMany(mud.map(([r,n])=>[r.id,n]));
+    toast(`Contatos separados em E-mail e WhatsApp (${mud.length} cliente${mud.length>1?'s':''})`);
+  }catch(e){contatoMigrado=false;handleWriteErr(e)}
+}
 async function migrarStatus(){
   if(statusMigrado||!canWrite||!cfgLoaded||!loaded||ASSIST()) return; statusMigrado=true;
   const limpar=!cfgFlags.obsLimpa;
@@ -600,7 +628,7 @@ const SEM_COB_TIPOS=['parceria','permuta','filantropia','pagoporoutro'];
 const semCobranca=r=>!!r&&SEM_COB_TIPOS.includes(String(r.tipo||'').trim().toLowerCase());
 /* esporádico: sem plano, paga só os adicionais do mês (a assistente recebe só o aviso esporadico=true) */
 const ehEsporadico=r=>!!r&&(String(r.tipo||'').trim().toLowerCase()==='esporadico'||r.esporadico===true);
-const SEM_COB_COLS=['diaEnvio','contato','vencimento'];
+const SEM_COB_COLS=['diaEnvio','email','whatsapp','vencimento'];
 /* não pagante: só nome, tipo, publicações, adicionais e observações ficam ativos; o resto fica vazio (os dados não são apagados) */
 const ATIVOS_SEM_COB=['cliente','tipo','publicacoes','adicionais','obs'];
 /* ---------- grupos: várias contas pagas por uma mensalidade só ----------
@@ -610,7 +638,7 @@ const ehGrupo=r=>!!r&&String(r.tipo||'').trim().toLowerCase()==='grupo';
 const grupoDe=r=>{if(!r||isEmpty(r.grupoId))return null;const g=rows.find(x=>x.id===String(r.grupoId));return ehGrupo(g)?g:null};
 const ehConta=r=>!!grupoDe(r);
 const contasDe=g=>rows.filter(r=>String(r.grupoId||'')===g.id).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||''));
-const ATIVOS_GRUPO=['cliente','tipo','valorMensal','adicionais','totalMes','diaEnvio','contato','valorNF','status','obs'];
+const ATIVOS_GRUPO=['cliente','tipo','valorMensal','adicionais','totalMes','diaEnvio','email','whatsapp','valorNF','status','obs'];
 const NA_CONTA=['valorMensal','adicionais','totalMes','diaEnvio','valorNF','status','valorBoleto','issRetido','diferenca','liquidoNF'];
 const naoSeAplica=(c,r)=>{
   if(ehGrupo(r)) return !ATIVOS_GRUPO.includes(c.key);
@@ -954,15 +982,33 @@ function ensureDatalist(key){
 }
 const ISENTO='Isento';
 const ehIsento=v=>/^\s*isent[oa]\s*$/i.test(String(v??''));
+/* e-mail e WhatsApp conferidos antes de salvar (vão ser usados para enviar os boletos) */
+const EMAIL_RE=/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/;
+function normEmails(raw){
+  const parts=String(raw??'').split(/[,;\s]+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+  if(!parts.length) return null;
+  if(parts.some(x=>!EMAIL_RE.test(x))) return {err:'E-mail inválido. Use algo como nome@empresa.com.br (vários, separe com vírgula).'};
+  return parts.join(', ');
+}
+function normWhats(raw){
+  let d=String(raw??'').replace(/\D/g,''); if(!d) return null;
+  if(d.length>=12&&d.startsWith('55')) d=d.slice(2);
+  d=d.replace(/^0+/,'');
+  if(d.length!==10&&d.length!==11) return {err:'WhatsApp incompleto. Use DDD + número, como 51 99728-1339.'};
+  const ddd=d.slice(0,2), n=d.slice(2);
+  return `+55 (${ddd}) ${n.length===9?n.slice(0,5)+'-'+n.slice(5):n.slice(0,4)+'-'+n.slice(4)}`;
+}
 function toValue(col,raw){
   if(ehIsento(raw)) return ISENTO;
+  if(col.type==='email') return normEmails(raw);
+  if(col.type==='whats') return normWhats(raw);
   if(col.type==='money'){const n=parseMoney(raw);if(n===null)return null;if(isNaN(n))return {err:true};return n}
   const s=String(raw).trim(); return s===''?null:s;
 }
 async function commit(id,col,raw){
   const r=rows.find(x=>x.id===id); if(!r) return;
   const nv=toValue(col,raw);
-  if(nv&&nv.err){toast(`“${raw}” não é um valor válido. Use algo como 1.380,00.`);return}
+  if(nv&&nv.err){toast(typeof nv.err==='string'?nv.err:`“${raw}” não é um valor válido. Use algo como 1.380,00.`);return}
   const ov=isEmpty(r[col.key])?null:r[col.key];
   if(ov===nv) return;
   const antes=copia(r);
@@ -1307,15 +1353,45 @@ function boletosDoMes(){
   }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
 }
 const vaiNoTexto=b=>b.gerar&&!b.faltas.length;
+const PASTA_BOLETOS=()=>`Downloads/Boletos GHAID/${refMes}`;
+const nomeArquivo=(b,i)=>`${refMes} ${String(b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${b.partes.length>1?` boleto ${i+1} de ${b.partes.length}`:''}.pdf`;
+const emailDe=b=>valido(b.r.email)?b.r.email:(valido(b.pag.email)?b.pag.email:null);
+const whatsDe=b=>valido(b.r.whatsapp)?b.r.whatsapp:(valido(b.pag.whatsapp)?b.pag.whatsapp:null);
+const EMAIL_FIM_PADRAO='Qualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe GHAID';
+const emailFim=()=>cfgFlags.emailFim||EMAIL_FIM_PADRAO;
+function corpoEmail(b){
+  const r=b.r, mes=mesLabel(refMes).toLowerCase(), it=itemsOf(r), L=[`Olá, ${r.cliente}!`,'',`Segue em anexo ${b.partes.length>1?'os boletos referentes':'o boleto referente'} a ${mes}.`,'',`Protocolo da cobrança · ${mes}`];
+  if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`)}
+  if(!ehEsporadico(r)) L.push(`Plano mensal: ${brl.format(planoValor(r))}`);
+  if(it.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');it.forEach(i=>{const st=sitDe(i);L.push(`• ${i.desc||'Item'}: ${st?SIT_TEXTO[st]:brl.format(isNum(i.valor)?i.valor:0)}`)})}
+  L.push(`Total: ${brl.format(b.total)}`);
+  if(b.partes.length>1) b.partes.forEach((x,i)=>L.push(`Boleto ${i+1} de ${b.partes.length}: ${brl.format(x.valor)}, vencimento ${dataBR(x.venc)}`));
+  else L.push(`Vencimento: ${dataBR(b.partes[0].venc)}`);
+  L.push('',emailFim());
+  return L.join('\n');
+}
+function textoEmails(lista){
+  const prontos=lista.filter(vaiNoTexto), comEmail=prontos.filter(emailDe), semEmail=prontos.filter(b=>!emailDe(b));
+  const L=[`Enviar os boletos por e-mail · ${mesLabel(refMes)}`,'',
+    'Use o Gmail da GHAID aberto neste navegador. Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'.',
+    'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
+  comEmail.forEach((b,n)=>{
+    L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Para: ${emailDe(b)}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`,
+      `Anexar: ${b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ')}`,'Texto:',corpoEmail(b),'');
+  });
+  if(semEmail.length){L.push('Sem e-mail cadastrado (não enviar, cadastre o e-mail no GHAID Cash):');semEmail.forEach(b=>L.push(`- ${b.r.cliente}`))}
+  return L.join('\n');
+}
 function textoBoletos(lista){
   const cfg=cfgBoleto(), prontos=lista.filter(vaiNoTexto);
   const L=[`Gerar boletos no Sicredi · ${mesLabel(refMes)}`,`Juros: ${cfg.juros} · Multa: ${cfg.multa}`,'',
     'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
-    'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',''];
+    'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',
+    `Depois de emitir cada boleto, baixe o PDF e salve na pasta ${PASTA_BOLETOS()} com o nome indicado na linha (esses arquivos serão anexados nos e-mails depois).`,''];
   let n=0;
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
     const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
-    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente})`)}));
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · salvar como: ${nomeArquivo(b,i)}`)}));
   const pend=lista.filter(b=>b.gerar&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
@@ -1424,6 +1500,7 @@ function openBoletos(){
       return `<div class="bol${!b.gerar?' off':b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
         <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}${b.esp?' · esporádico':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
+        <div class="bolsub${emailDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'sem e-mail (não entra no envio)'}${whatsDe(b)?` · WhatsApp ${esc(whatsDe(b))}`:''}</div>
         ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de envio)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
         <label class="boldiv"><input type="checkbox" data-gerar${b.gerar?' checked':''}> OK, liberado para gerar boleto</label>${b.gerar?'':'<div class="bolsub">Aguardando OK no Status cobrança: fica fora do texto do Claude in Chrome.</div>'}
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
@@ -1435,13 +1512,22 @@ function openBoletos(){
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
-      <div class="sec">Texto para o Claude in Chrome</div>
-      <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>`,
-      `<span></span><div style="display:flex;gap:8px"><button class="btn" id="bolFechar" type="button">Fechar</button><button class="btn primary" id="bolCopiar" type="button">Copiar texto</button></div>`);
+      <div class="sec">1. Texto para gerar os boletos (Claude in Chrome no Sicredi)</div>
+      <p class="sub" style="margin:0;font-size:12px">Para salvar cada PDF com o nome certo, ative no Chrome: Configurações → Downloads → Perguntar onde salvar cada arquivo.</p>
+      <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>
+      <div><button class="btn" id="bolCopiar" type="button">Copiar texto 1</button></div>
+      <div class="sec">2. Texto para enviar os e-mails (Claude in Chrome no Gmail, depois de gerar)</div>
+      <div class="field"><label for="bFim">Saudação final do e-mail</label><textarea id="bFim" rows="3">${esc(emailFim())}</textarea></div>
+      <textarea class="emailbox" id="bolEmails" readonly>${esc(textoEmails(lista))}</textarea>
+      <div><button class="btn" id="bolCopiar2" type="button">Copiar texto 2</button></div>`,
+      `<span></span><div style="display:flex;gap:8px"><button class="btn" id="bolFechar" type="button">Fechar</button></div>`);
     painelVivo=draw;
     $('#bolFechar').onclick=closeDrawer;
-    $('#bolCopiar').onclick=()=>{const t=$('#bolTexto').value;const fb=()=>{const el=$('#bolTexto');el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
-      try{navigator.clipboard.writeText(t).then(()=>toast('Texto copiado. Cole no Claude in Chrome com o Sicredi aberto.'),fb)}catch(e){fb()}};
+    const copiar=(sel,msg)=>{const t=$(sel).value;const fb=()=>{const el=$(sel);el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
+      try{navigator.clipboard.writeText(t).then(()=>toast(msg),fb)}catch(e){fb()}};
+    $('#bolCopiar').onclick=()=>copiar('#bolTexto','Texto 1 copiado. Cole no Claude in Chrome com o Sicredi aberto.');
+    $('#bolCopiar2').onclick=()=>copiar('#bolEmails','Texto 2 copiado. Cole no Claude in Chrome com o Gmail aberto.');
+    $('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());toast('Saudação final salva')};
     const salvarCfg=()=>{cfgFlags={...cfgFlags,boleto:{juros:$('#bJuros').value.trim()||BOLETO_PADRAO.juros,multa:$('#bMulta').value.trim()||BOLETO_PADRAO.multa}};saveCols();$('#bolTexto').value=textoBoletos(boletosDoMes());toast('Juros e multa salvos')};
     $('#bJuros').onchange=salvarCfg; $('#bMulta').onchange=salvarCfg;
     // grava e garante o valor novo na linha atual (uma leitura antiga da planilha pode ter chegado no meio)
@@ -1477,7 +1563,7 @@ function abrirAgrupar(){
   if(contas.length<2){toast('Selecione pelo menos 2 clientes para agrupar.');return}
   const soma=contas.reduce((s,r)=>s+planoValor(r),0);
   const nItens=contas.reduce((s,r)=>s+(Array.isArray(r.adicionaisItens)?r.adicionaisItens.length:0),0);
-  const contato=(contas.find(r=>!isEmpty(r.contato)&&!ehIsento(r.contato))||{}).contato||'';
+  const contato=(contas.find(r=>!isEmpty(r.email)&&!ehIsento(r.email))||{}).email||'';
   shell('Agrupar clientes',`
     <p class="sub" style="margin:0;font-size:13px">O grupo vira uma linha com um só valor do plano, adicionais e total. As contas ficam logo abaixo dela, só com os dados de cadastro.</p>
     <div class="imp">${contas.map(r=>`<div class="imp-row"><span class="nm">${esc(r.cliente||'sem nome')}</span><span class="tag">${isNum(planoNoMes(r))?brl.format(planoNoMes(r)):'sem valor'}</span></div>`).join('')}
@@ -1485,7 +1571,7 @@ function abrirAgrupar(){
     <div class="field"><label for="gNome">Nome do grupo (quem paga)</label><input id="gNome" autocomplete="off" placeholder="Ex.: Grupo R. Selau"></div>
     <div class="field"><label for="gValor">Valor do plano do grupo</label><input id="gValor" inputmode="decimal" value="${moedaTxt(soma)}" placeholder="0,00"></div>
     <div class="field"><label for="gDia">Dia de envio do boleto</label><input id="gDia" value="${esc(maisComum(contas.map(r=>r.diaEnvio)))}" placeholder="Ex.: 10"></div>
-    <div class="field"><label for="gContato">Contato p/ boleto</label><input id="gContato" value="${esc(contato)}"></div>
+    <div class="field"><label for="gContato">E-mail p/ boleto</label><input id="gContato" type="email" value="${esc(contato)}"></div>
     ${nItens?`<p class="sub" style="margin:0;font-size:12px">${nItens} adicional(is) que estavam nas contas passam para o grupo, com o nome da conta na frente. Ao desagrupar, cada um volta para a sua conta.</p>`:''}`,
     `<span></span><div style="display:flex;gap:8px"><button class="btn" id="gCancel" type="button">Cancelar</button><button class="btn primary" id="gSave" type="button">Agrupar ${contas.length} contas</button></div>`);
   $('#gNome').focus();
@@ -1499,7 +1585,7 @@ function abrirAgrupar(){
     const antes=contas.map(r=>({id:r.id,antes:copia(r)}));
     const itensGrupo=[];
     contas.forEach(r=>(Array.isArray(r.adicionaisItens)?r.adicionaisItens:[]).forEach(i=>itensGrupo.push({...i,desc:`${r.cliente}: ${i.desc||''}`.trim()})));
-    const grupo={cliente:nome.toUpperCase(),tipo:'grupo',valorMensal:v,diaEnvio:$('#gDia').value.trim()||null,contato:$('#gContato').value.trim()||null,adicionaisItens:itensGrupo};
+    const grupo={cliente:nome.toUpperCase(),tipo:'grupo',valorMensal:v,diaEnvio:$('#gDia').value.trim()||null,email:(v=>v&&!v.err?v:null)(normEmails($('#gContato').value)),adicionaisItens:itensGrupo};
     $('#gSave').disabled=true;
     rows.push({id:gid,...copia(grupo)}); contas.forEach(r=>{r.grupoId=gid;r.adicionaisItens=[]});
     selecionados.clear(); closeDrawer(); render();
@@ -1755,7 +1841,7 @@ function openClient(id){
     for(const c of cols){if(c.type==='calc'||!podeVer(c)||(c.type==='tipo'&&ASSIST())||(ASSIST()&&c.key!=='cliente'))continue;const el=document.getElementById('f-'+c.key);if(!el)continue;
       if(c.key==='status'){Object.assign(data,novoStatus(r,!!el.value));continue} // OK só no mês da tela
       if(c.type==='ok'||c.type==='tipo'||c.type==='simnao'){data[c.key]=el.value||null;continue}
-      const v=toValue(c,el.value); if(v&&v.err){toast(`${c.label}: valor inválido. Use algo como 1.380,00.`);el.focus();return} data[c.key]=v}
+      const v=toValue(c,el.value); if(v&&v.err){toast(typeof v.err==='string'?`${c.label}: ${v.err}`:`${c.label}: valor inválido. Use algo como 1.380,00.`);el.focus();return} data[c.key]=v}
     if(isEmpty(data.cliente)){toast('Dê um nome ao cliente.');$('#f-cliente').focus();return}
     $('#saveBtn').disabled=true;
     try{
@@ -1882,10 +1968,10 @@ function enterApp(){
   clearTimeout(loadTimer);
   loadTimer=setTimeout(()=>{if(!loaded){setSync('off','Sem resposta do banco');$('#emptyState').innerHTML='<strong>Não consegui carregar os dados ainda</strong>Verifique a conexão. A tabela aparece assim que o banco responder.'}},10000);
   if(!downloads&&window.claude) window.claude.use('downloads').then(d=>{if(d){downloads=d;$('#csvBtn').hidden=false}});
-  unsubs.push(db.doc('config/tabela').onSnapshot(s=>{if(s.exists&&s.data()&&s.data().flags)cfgFlags=s.data().flags;if(s.exists&&!document.querySelector('.colrow')){applyCfg(s.data());render()}cfgLoaded=true;migrarStatus()},()=>{}));
+  unsubs.push(db.doc('config/tabela').onSnapshot(s=>{if(s.exists&&s.data()&&s.data().flags)cfgFlags=s.data().flags;if(s.exists&&!document.querySelector('.colrow')){applyCfg(s.data());render()}cfgLoaded=true;migrarStatus();migrarContato()},()=>{}));
   unsubs.push(db.collection('clientes').onSnapshot(snap=>{
     rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(!snap.metadata.fromCache){loaded=true;clearTimeout(loadTimer);setSync('on','Salvo na nuvem');migrarStatus()}
+    if(!snap.metadata.fromCache){loaded=true;clearTimeout(loadTimer);setSync('on','Salvo na nuvem');migrarStatus();migrarContato()}
     else if(rows.length) loaded=true;
     render();
   },err=>{if(err&&err.code==='login'){sairDoApp('Sua sessão expirou. Entre de novo.');return}clearTimeout(loadTimer);loaded=true;setSync('off','Conexão perdida');notice('A conexão com o banco caiu. Recarregue a página para continuar editando.');render()}));
