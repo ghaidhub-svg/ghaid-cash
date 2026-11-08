@@ -208,6 +208,7 @@ tr.conta td.namecell .c{padding-left:30px;font-weight:500}
 .bolsub{color:var(--muted)}
 .bolsub select{height:32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;padding:0 8px;max-width:100%}
 .bolparte{display:flex;justify-content:space-between;gap:10px}
+.bolaguarda{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r);padding:10px 12px}
 .bolsememail{color:var(--alert-text)}
 #bFim{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--fg);resize:vertical}
 .bolfalta{color:var(--alert-text);font-weight:600;font-size:12px}
@@ -1511,7 +1512,8 @@ function openBoletos(){
       <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) liberado(s), somando ${brl.format(soma)}. Só entra no texto quem está com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
-      <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
+      <div class="imp">${lista.filter(b=>b.gerar).map(card).join('')||`<div class="sub">Nenhum cliente com OK em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
+      ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLabel(refMes).toLowerCase())} não aparecem aqui: ${esc(lista.filter(b=>!b.gerar).map(b=>b.r.cliente).join(', '))}.</div>`:''}
       <div class="sec">1. Texto para gerar os boletos (Claude in Chrome no Sicredi)</div>
       <p class="sub" style="margin:0;font-size:12px">Para salvar cada PDF com o nome certo, ative no Chrome: Configurações → Downloads → Perguntar onde salvar cada arquivo.</p>
       <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>
