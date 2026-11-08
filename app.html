@@ -1323,7 +1323,7 @@ function openPub(id){
   draw();
 }
 /* ---------- boletos do mês: lista conferida para gerar no banco ----------
-   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = coluna Dia de vencimento (campo diaEnvio) no mês de referência.
+   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = coluna Dia de vencimento (campo diaEnvio) no mês seguinte ao de referência.
    "Dividir em 2 boletos" fica salvo no cliente (campo boleto2):
      modo "valor": o total em duas partes (valor do 1º escolhido, o 2º é o resto);
      modo "adicionais": plano fixo num boleto e adicionais do mês em outro.
@@ -1335,14 +1335,16 @@ const cfgBoleto=()=>{const s=cfgFlags.boleto||{};const antigo=BOLETO_ANTIGOS.som
 const lerJSON=v=>{if(!v)return null;if(typeof v==='object')return v;try{return JSON.parse(v)}catch(e){return null}};
 const valido=v=>!isEmpty(v)&&!ehIsento(v);
 const dataBR=iso=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');return m?`${m[3]}/${m[2]}/${m[1]}`:null};
-function isoNoMes(dia){ // dia do mês (número ou texto) dentro do mês de referência, em AAAA-MM-DD
+/* o boleto cobra o mês de referência (valores e adicionais), mas vence sempre no mês seguinte */
+const mesVenc=()=>shiftMes(refMes,1);
+function isoNoMes(dia){ // dia do vencimento (número ou texto) dentro do mês seguinte ao de referência, em AAAA-MM-DD
   const d=parseInt(String(dia??'').trim(),10); if(!(d>=1&&d<=31)) return null;
-  const [y,m]=refMes.split('-').map(Number), ult=new Date(y,m,0).getDate();
+  const [y,m]=mesVenc().split('-').map(Number), ult=new Date(y,m,0).getDate();
   return `${y}-${String(m).padStart(2,'0')}-${String(Math.min(d,ult)).padStart(2,'0')}`;
 }
 const dataVenc=dia=>dataBR(isoNoMes(dia));
-function vencEscolhido(iso,diaAntigo){ // data salva: vale no mês dela; nos outros meses, o mesmo dia
-  if(/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return iso.slice(0,7)===refMes?iso:isoNoMes(+iso.slice(8,10));
+function vencEscolhido(iso,diaAntigo){ // data salva: vale no mês de vencimento dela; nos outros meses, o mesmo dia
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return iso.slice(0,7)===mesVenc()?iso:isoNoMes(+iso.slice(8,10));
   return isoNoMes(diaAntigo);
 }
 function pagadorDe(r){
@@ -1549,7 +1551,7 @@ function openBoletos(){
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) com OK para disparar, somando ${brl.format(soma)}. Aqui aparecem os clientes com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} sem OK na coluna)`:''}. Confira, decida a forma de pagamento e marque <strong>OK para disparar</strong> em quem vai neste disparo: só esses entram nos textos. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) com OK para disparar, somando ${brl.format(soma)}. Aqui aparecem os clientes com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} sem OK na coluna)`:''}. Confira, decida a forma de pagamento e marque <strong>OK para disparar</strong> em quem vai neste disparo: só esses entram nos textos. Não pagantes, contas de grupo e arquivados ficam de fora. Os valores são de ${esc(mesLabel(refMes).toLowerCase())} e o vencimento fica em <strong>${esc(mesLabel(mesVenc()).toLowerCase())}</strong>, no dia da coluna Dia de vencimento.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.filter(b=>b.gerar&&!b.disp).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
