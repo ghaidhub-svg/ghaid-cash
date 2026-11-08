@@ -432,7 +432,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
     </div>
     <div class="panels">
       <article class="panel p7"><header><h3>Receita por cliente</h3><span class="ph" id="pRevNote"></span></header><div id="chRev" class="hbars"></div></article>
-      <article class="panel p5"><header><h3>Por dia de envio</h3><span class="ph">em R$</span></header><div id="chDay" class="cols"></div></article>
+      <article class="panel p5"><header><h3>Por dia de vencimento</h3><span class="ph">em R$</span></header><div id="chDay" class="cols"></div></article>
       <article class="panel p6"><header><h3>Falta preencher</h3></header><div id="chMiss" class="hbars"></div></article>
       <article class="panel p6"><header><h3>Adicionais do mês</h3><span class="ph" id="pAddNote"></span></header><div id="chDiv" class="divlist"></div></article>
     </div>
@@ -483,7 +483,7 @@ const DEFAULT_COLS=[
  {key:'valorMensal',label:'Valor do plano',type:'money',required:true},
  {key:'adicionais',label:'Adicionais do mês',type:'calc',items:true},
  {key:'totalMes',label:'Total do mês',type:'calc',strong:true},
- {key:'diaEnvio',label:'Dia de envio',type:'text',required:true},
+ {key:'diaEnvio',label:'Dia de vencimento',type:'text',required:true},
  {key:'email',label:'E-mail p/ boleto',type:'email',required:true},
  {key:'whatsapp',label:'WhatsApp',type:'whats'},
  {key:'valorNF',label:'Nota fiscal',type:'money'},
@@ -1298,7 +1298,7 @@ function openPub(id){
   draw();
 }
 /* ---------- boletos do mês: lista conferida para gerar no banco ----------
-   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = coluna Dia de envio no mês de referência.
+   Uma linha por cobrança (cliente pagante ou grupo). Vencimento = coluna Dia de vencimento (campo diaEnvio) no mês de referência.
    "Dividir em 2 boletos" fica salvo no cliente (campo boleto2):
      modo "valor": o total em duas partes (valor do 1º escolhido, o 2º é o resto);
      modo "adicionais": plano fixo num boleto e adicionais do mês em outro.
@@ -1347,7 +1347,7 @@ function boletosDoMes(){
     if(!isNum(total)||total<=0) faltas.push('valor');
     if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
     const partes=partesBoleto(r,div,total);
-    if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'vencimento (Dia de envio)');
+    if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'Dia de vencimento');
     const esp=ehEsporadico(r), gerar=okNoMes(r); // só entra no texto com OK no Status cobrança deste mês
     return {r,pag,total,div,partes,faltas,esp,gerar};
   }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
@@ -1501,14 +1501,14 @@ function openBoletos(){
         <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}${b.esp?' · esporádico':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
         <div class="bolsub${emailDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'sem e-mail (não entra no envio)'}${whatsDe(b)?` · WhatsApp ${esc(whatsDe(b))}`:''}</div>
-        ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de envio)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
+        ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de vencimento)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
         <label class="boldiv"><input type="checkbox" data-gerar${b.gerar?' checked':''}> OK, liberado para gerar boleto</label>${b.gerar?'':'<div class="bolsub">Aguardando OK no Status cobrança: fica fora do texto do Claude in Chrome.</div>'}
         ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
         <div><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button></div>
       </div>`;
     };
     shell('Boletos do mês',`
-      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) liberado(s), somando ${brl.format(soma)}. Só entra no texto quem está com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de envio.</p>
+      <p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: ${nBol} boleto(s) liberado(s), somando ${brl.format(soma)}. Só entra no texto quem está com <strong>OK</strong> no Status cobrança deste mês${nAguarda?` (${nAguarda} aguardando OK)`:''}. Não pagantes, contas de grupo e arquivados ficam de fora. A data de cada boleto vem da coluna Dia de vencimento.</p>
       <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
       <div class="sec">Cobranças</div>
       <div class="imp">${lista.map(card).join('')||'<div class="sub">Nenhum cliente pagante ativo.</div>'}</div>
@@ -1570,7 +1570,7 @@ function abrirAgrupar(){
       <div class="imp-row soma"><span class="nm">Soma das contas</span><span class="tag">${brl.format(soma)}</span></div></div>
     <div class="field"><label for="gNome">Nome do grupo (quem paga)</label><input id="gNome" autocomplete="off" placeholder="Ex.: Grupo R. Selau"></div>
     <div class="field"><label for="gValor">Valor do plano do grupo</label><input id="gValor" inputmode="decimal" value="${moedaTxt(soma)}" placeholder="0,00"></div>
-    <div class="field"><label for="gDia">Dia de envio do boleto</label><input id="gDia" value="${esc(maisComum(contas.map(r=>r.diaEnvio)))}" placeholder="Ex.: 10"></div>
+    <div class="field"><label for="gDia">Dia de vencimento do boleto</label><input id="gDia" value="${esc(maisComum(contas.map(r=>r.diaEnvio)))}" placeholder="Ex.: 10"></div>
     <div class="field"><label for="gContato">E-mail p/ boleto</label><input id="gContato" type="email" value="${esc(contato)}"></div>
     ${nItens?`<p class="sub" style="margin:0;font-size:12px">${nItens} adicional(is) que estavam nas contas passam para o grupo, com o nome da conta na frente. Ao desagrupar, cada um volta para a sua conta.</p>`:''}`,
     `<span></span><div style="display:flex;gap:8px"><button class="btn" id="gCancel" type="button">Cancelar</button><button class="btn primary" id="gSave" type="button">Agrupar ${contas.length} contas</button></div>`);
@@ -1703,7 +1703,7 @@ function renderDash(act,nArq){
     +(rest.length?`<div class="restline">+ ${rest.length} clientes somando ${brl.format(restSum)}</div>`:'')
     ||'<div class="okmsg">Nenhum valor mensal cadastrado ainda.</div>';
 
-  // receita por dia de envio
+  // receita por dia de vencimento
   const days={};
   for(const r of withVal){const d=String(r.diaEnvio??'').trim()||'sem dia';(days[d]=days[d]||{v:0,n:[]}).v+=tm(r);days[d].n.push(r.cliente)}
   const dk=Object.keys(days).sort((a,b)=>(parseInt(a)||99)-(parseInt(b)||99));
