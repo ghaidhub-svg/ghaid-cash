@@ -1859,8 +1859,10 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#drawerRoot').fi
 function shell(title,body,foot){
   const mesmo=$('#drawerRoot .drawer')?.getAttribute('aria-label')===title; // redesenho do mesmo painel: sem animar de novo
   if(!mesmo){drawerUndo=null;painelVivo=null}
+  // redesenho do mesmo painel: guarda a rolagem (do painel e das caixas de texto) para a tela não pular para o topo
+  const rol=mesmo?{y:$('#drawerRoot .dbody')?.scrollTop||0,ta:[...document.querySelectorAll('#drawerRoot textarea[id]')].map(t=>[t.id,t.scrollTop])}:null;
   $('#drawerRoot').innerHTML=`<div class="scrim" id="scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="dhead"><h2>${esc(title)}</h2><button class="x" id="dx" aria-label="Fechar">×</button></div><div class="dbody">${body}</div><div class="dfoot">${foot}</div></aside>`;
-  if(mesmo) $('#drawerRoot .drawer').classList.add('noanim');
+  if(mesmo){$('#drawerRoot .drawer').classList.add('noanim');$('#drawerRoot .dbody').scrollTop=rol.y;rol.ta.forEach(([i,y])=>{const t=document.getElementById(i);if(t)t.scrollTop=y})}
   $('#scrim').onclick=closeDrawer; $('#dx').onclick=closeDrawer;
 }
 function openClient(id){
