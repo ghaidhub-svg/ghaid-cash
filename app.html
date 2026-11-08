@@ -169,7 +169,7 @@ td.miss .isbtn{color:var(--alert-text)}
 .ismenu{position:fixed;z-index:40;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;min-width:120px}
 .ismenu button{display:block;width:100%;height:36px;border:0;border-radius:calc(var(--r) - 2px);background:transparent;color:var(--fg);font:inherit;font-size:13px;font-weight:500;text-align:left;padding:0 12px;cursor:pointer}
 .ismenu button:hover,.ismenu button:focus-visible{background:var(--surface-2);outline:none}
-td .c.nfnao{color:var(--muted)}
+td .c.nfnao,td.nfcell .nfval.nfnao{color:var(--muted)}
 td .c.isento{color:var(--muted);font-style:italic}
 .pubil{display:flex;align-items:center;gap:10px;min-height:var(--ctl);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font-size:14px;font-weight:600}
 .pubil input{width:18px;height:18px;margin:0;accent-color:var(--fg)}
@@ -323,7 +323,12 @@ td.items .c{cursor:pointer;color:var(--fg);font-weight:600}
 td.items .c.empty{color:var(--muted);font-weight:500;font-size:12px}
 td.items .c.visto{color:var(--good)}
 td.items .c.sempreco,td.items .c.sempreco .cnt{color:var(--alert-text)}
-td.nfcell .c.okv{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+td.nfcell .nfwrap{display:flex;align-items:center;justify-content:space-between;gap:8px}
+td.nfcell .nfval.okv{color:var(--good);font-weight:700;display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.nfclip{flex:none;width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer;padding:0}
+.nfclip:hover,.nfclip:focus-visible{color:var(--fg);border-color:var(--fg)}
+.nfclip.tem{color:var(--good);border-color:var(--good)}
+.nfclip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 td.nfcell .perm{font-size:11px;font-weight:500;color:var(--muted)}
 td.temperm .c{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 td.temperm .perm{font-size:11px;font-weight:500;color:var(--muted)}
@@ -534,6 +539,7 @@ function permutaNoMes(r,m=refMes){
   const v=r?Number(r.valorPermuta):0; return r&&!isEmpty(r.valorPermuta)&&isFinite(v)?v:0;
 }
 // Nota fiscal na tabela = nota anexada no mês da tela (o valor antigo da importação fica guardado, mas não aparece)
+const ICON_CLIPE='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg>';
 const valorDe=(c,r)=>c.key==='valorMensal'?planoNoMes(r):c.key==='valorNF'?(notaDoMes(r)?notaDoMes(r).bruto:null):r[c.key];
 function mesLabel(m){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1)}
 function shiftMes(m,d){const [y,mo]=m.split('-').map(Number);const t=new Date(y,mo-1+d,1);return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`}
@@ -820,7 +826,7 @@ function render(){
       if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
       if(c.type==='ok'){const ok=okDe(c,r);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
       const miss=c.required&&c.type!=='calc'&&isEmpty(valorDe(c,r))&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
-      if(c.key==='valorNF'){const nf=notaDoMes(r);return `<td class="money nfcell" data-k="${c.key}"><div class="c${nf?' okv':' nfnao'}" title="${nf?`Nota${nf.num?` nº ${nf.num}`:''} de ${mesLabel(refMes).toLowerCase()}: boleto de ${brl.format(nf.liquido)}. Clique para trocar`:`Sem nota em ${mesLabel(refMes).toLowerCase()}. Clique para anexar o PDF da nota`}">${nf?`${esc(brl.format(nf.bruto))}${nf.num?`<span class="perm">nº ${esc(nf.num)}${nf.iss>0?` · líquido ${esc(brl.format(nf.liquido))}`:''}</span>`:''}`:'Não'}</div></td>`}
+      if(c.key==='valorNF'){const nf=notaDoMes(r);return `<td class="money nfcell" data-k="${c.key}"><div class="c nfwrap"><button type="button" class="nfclip${nf?' tem':''}" data-nfanexar title="${nf?'Trocar a nota fiscal (PDF)':'Anexar nota fiscal (PDF)'}" aria-label="${nf?'Trocar':'Anexar'} nota fiscal de ${esc(r.cliente||'cliente')}">${ICON_CLIPE}</button><span class="nfval${nf?' okv':' nfnao'}" title="${nf?`Nota${nf.num?` nº ${nf.num}`:''} de ${mesLabel(refMes).toLowerCase()}: boleto de ${brl.format(boletoPelaNota(r,nf))}`:`Sem nota em ${mesLabel(refMes).toLowerCase()}`}">${nf?`${esc(brl.format(nf.bruto))}${nf.num?`<span class="perm">nº ${esc(nf.num)}${nf.iss>0?` · líquido ${esc(brl.format(nf.liquido))}`:''}</span>`:''}`:'Não'}</span></div></td>`}
       const podeIsentar=(isEmpty(r[c.key])||ehIsento(r[c.key]))&&!['calc','ok','tipo','simnao'].includes(c.type)&&!c.items&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
       const seta=podeIsentar?`<button class="isbtn" type="button" data-isento="${c.key}" title="Opções" aria-label="Opções de ${esc(c.label)}">▾</button>`:'';
       if(c.key==='publicacoes'){const t=pubResumo(r),curto=pubCurto(r);return `<td class="text pubcell${miss?' miss':''}${seta?' hasis':''}" data-k="publicacoes"><div class="c${ehIsento(t)?' isento':''}" data-tip="<strong>Publicações</strong>${esc(t||'Não definido. Clique para preencher.')}">${miss?'?':esc(curto||t)}</div>${seta}</td>`}
@@ -872,6 +878,8 @@ async function rowAction(btn,id){
 $('#tbody').addEventListener('click',e=>{
   const sb=e.target.closest('[data-sel]');
   if(sb){e.stopPropagation();const id=sb.closest('tr').dataset.id;if(sb.checked)selecionados.add(id);else selecionados.delete(id);renderSelBar();return}
+  const clip=e.target.closest('[data-nfanexar]');
+  if(clip){e.stopPropagation();escolherNota(clip.closest('tr').dataset.id,()=>render());return}
   const nfb=e.target.closest('[data-nfmenu]');
   if(nfb){e.stopPropagation();abrirMenuNF(nfb,nfb.closest('tr').dataset.id);return}
   const tpb=e.target.closest('[data-tipomenu]');
