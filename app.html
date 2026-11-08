@@ -1382,7 +1382,10 @@ function boletosDoMes(){
 }
 // vai para o texto: OK na coluna Status cobrança (entra no painel) + OK para disparar dentro do painel, ainda não disparado, sem pendência
 const vaiNoTexto=b=>b.gerar&&b.incluir&&!b.disp&&!b.faltas.length;
-const PASTA_BOLETOS=()=>`Downloads/Boletos GHAID/${refMes}`;
+const PASTA_BOLETOS=()=>`Documentos/Boletos GHAID/${refMes}`;
+/* contas que fazem o envio (financeiro): ficam na config, valem para todos os meses */
+const envioCfg=()=>({email:(cfgFlags.envio&&cfgFlags.envio.email)||'',whats:(cfgFlags.envio&&cfgFlags.envio.whats)||''});
+const whatsDigitos=w=>{const d=String(String(w||'').split(/[,;\/]| e /)[0]).replace(/\D/g,'');return d?(d.startsWith('55')&&d.length>=12?d:'55'+d.replace(/^0+/,'')):''};
 const nomeArquivo=(b,i)=>`${refMes} ${String(b.r.cliente||'cliente').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()}${b.partes.length>1?` boleto ${i+1} de ${b.partes.length}`:''}.pdf`;
 const emailDe=b=>valido(b.r.email)?b.r.email:(valido(b.pag.email)?b.pag.email:null);
 const whatsDe=b=>valido(b.r.whatsapp)?b.r.whatsapp:(valido(b.pag.whatsapp)?b.pag.whatsapp:null);
@@ -1401,8 +1404,11 @@ function corpoEmail(b){
 }
 function textoEmails(lista){
   const prontos=lista.filter(vaiNoTexto), comEmail=prontos.filter(emailDe), semEmail=prontos.filter(b=>!emailDe(b));
+  const de=envioCfg().email;
   const L=[`Enviar os boletos por e-mail · ${mesLabel(refMes)}`,'',
-    'Use o Gmail da GHAID aberto neste navegador. Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'.',
+    de?`Envie pelo Gmail da conta ${de} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${de}, troque para ela ou pare e me avise. Não envie por outra conta.`
+      :'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual conta enviar e não envie por nenhuma outra.',
+    'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'.',
     'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
   comEmail.forEach((b,n)=>{
     L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Para: ${emailDe(b)}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`,
@@ -1411,12 +1417,26 @@ function textoEmails(lista){
   if(semEmail.length){L.push('Sem e-mail cadastrado (não enviar, cadastre o e-mail no GHAID Cash):');semEmail.forEach(b=>L.push(`- ${b.r.cliente}`))}
   return L.join('\n');
 }
+function textoWhats(lista){
+  const prontos=lista.filter(vaiNoTexto), com=prontos.filter(whatsDe), sem=prontos.filter(b=>!whatsDe(b)), de=envioCfg().whats;
+  const L=[`Enviar os boletos por WhatsApp · ${mesLabel(refMes)}`,'',
+    de?`Envie pelo WhatsApp Web conectado no número ${de} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado (Configurações → perfil): se não for ${de}, pare e me avise. Não envie por outro número.`
+      :'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual número enviar e não envie por nenhum outro.',
+    'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+'.',
+    'Antes de enviar cada mensagem, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule esse cliente.',''];
+  com.forEach((b,n)=>{
+    L.push(`--- ${n+1}. ${b.r.cliente} ---`,`WhatsApp: ${whatsDe(b)} · abrir: https://web.whatsapp.com/send?phone=${whatsDigitos(whatsDe(b))}`,
+      `Anexar: ${b.partes.map((x,i)=>nomeArquivo(b,i)).join(' e ')}`,'Mensagem:',corpoEmail(b),'');
+  });
+  if(sem.length){L.push('Sem WhatsApp cadastrado (não enviar por aqui):');sem.forEach(b=>L.push(`- ${b.r.cliente}`))}
+  return L.join('\n');
+}
 function textoBoletos(lista){
   const cfg=cfgBoleto(), prontos=lista.filter(vaiNoTexto);
   const L=[`Gerar boletos no Sicredi · ${mesLabel(refMes)}`,`Juros: ${cfg.juros} · Multa: ${cfg.multa}`,'',
     'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
     'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar. Não faça pagamentos nem transferências.',
-    `Depois de emitir cada boleto, baixe o PDF e salve na pasta ${PASTA_BOLETOS()} com o nome indicado na linha (esses arquivos serão anexados nos e-mails depois).`,''];
+    `Depois de emitir cada boleto, baixe o PDF e salve na pasta ${PASTA_BOLETOS()} (dentro de Documentos deste computador, não em Downloads; crie a pasta se ainda não existir) com o nome indicado na linha. Esses arquivos serão anexados nos e-mails e no WhatsApp depois.`,''];
   let n=0;
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;
     const extra=b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'';
@@ -1542,7 +1562,7 @@ function openBoletos(){
       return `<div class="bol${!b.gerar?' off':b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
         <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}${b.esp?' · esporádico':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
         <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
-        <div class="bolsub${emailDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'sem e-mail (não entra no envio)'}${whatsDe(b)?` · WhatsApp ${esc(whatsDe(b))}`:''}</div>
+        <div class="bolsub${emailDe(b)||whatsDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'<span class="bolsememail">sem e-mail</span>'} · ${whatsDe(b)?`WhatsApp ${esc(whatsDe(b))}`:'<span class="bolsememail">sem WhatsApp</span>'}</div>
         ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de vencimento)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
         ${(it=>it.length?`<div class="bolitens"><span class="bolitt">${ehEsporadico(r)?'Serviços do mês':'Adicionais do mês'}</span>${it.map(i=>{const st=sitDe(i);return `<div><span>${esc(i.desc||'Item')}</span><span>${st?SIT_TEXTO[st]:isNum(i.valor)?brl.format(i.valor):'sem preço'}</span></div>`}).join('')}</div>`:'')(itemsOf(r))}
         <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
@@ -1558,14 +1578,20 @@ function openBoletos(){
       ${prontos.length?`<div class="bollote"><button class="btn" type="button" id="bolDisparado">Marcar estes ${prontos.length} como disparados</button><span>Use depois de gerar e enviar. Eles saem da lista deste mês e não entram de novo no próximo disparo.</span></div>`:''}
       ${(n=>n.length?`<div class="bolaguarda">Já disparados em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}): ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}<button type="button" data-voltar="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.disp))}
       ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLabel(refMes).toLowerCase())} não aparecem aqui: ${esc(lista.filter(b=>!b.gerar).map(b=>b.r.cliente).join(', '))}.</div>`:''}
+      <div class="sec">Envio pelo financeiro</div>
+      <div class="bolcfg"><div class="field"><label for="bDeEmail">E-mail que envia</label><input id="bDeEmail" type="email" placeholder="financeiro@..." value="${esc(envioCfg().email)}"></div><div class="field"><label for="bDeWhats">WhatsApp que envia</label><input id="bDeWhats" inputmode="tel" placeholder="51 99999-9999" value="${esc(envioCfg().whats)}"></div></div>
       <div class="sec">1. Texto para gerar os boletos (Claude in Chrome no Sicredi)</div>
-      <p class="sub" style="margin:0;font-size:12px">Para salvar cada PDF com o nome certo, ative no Chrome: Configurações → Downloads → Perguntar onde salvar cada arquivo.</p>
+      <p class="sub" style="margin:0;font-size:12px">Os PDFs vão para <strong>${esc(PASTA_BOLETOS())}</strong>. Para isso, ative no Chrome: Configurações → Downloads → Perguntar onde salvar cada arquivo.</p>
       <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>
       <div><button class="btn" id="bolCopiar" type="button">Copiar texto 1</button></div>
       <div class="sec">2. Texto para enviar os e-mails (Claude in Chrome no Gmail, depois de gerar)</div>
+      <p class="sub" style="margin:0;font-size:12px">O fim da mensagem vale para o e-mail e para o WhatsApp.</p>
       <div class="field"><label for="bFim">Saudação final do e-mail</label><textarea id="bFim" rows="3">${esc(emailFim())}</textarea></div>
       <textarea class="emailbox" id="bolEmails" readonly>${esc(textoEmails(lista))}</textarea>
-      <div><button class="btn" id="bolCopiar2" type="button">Copiar texto 2</button></div>`,
+      <div><button class="btn" id="bolCopiar2" type="button">Copiar texto 2</button></div>
+      <div class="sec">3. Texto para enviar pelo WhatsApp (Claude in Chrome no WhatsApp Web, depois de gerar)</div>
+      <textarea class="emailbox" id="bolWhats" readonly>${esc(textoWhats(lista))}</textarea>
+      <div><button class="btn" id="bolCopiar3" type="button">Copiar texto 3</button></div>`,
       `<span></span><div style="display:flex;gap:8px"><button class="btn" id="bolFechar" type="button">Fechar</button></div>`);
     painelVivo=draw;
     $('#bolFechar').onclick=closeDrawer;
@@ -1585,7 +1611,16 @@ function openBoletos(){
       try{navigator.clipboard.writeText(t).then(()=>toast(msg),fb)}catch(e){fb()}};
     $('#bolCopiar').onclick=()=>copiar('#bolTexto','Texto 1 copiado. Cole no Claude in Chrome com o Sicredi aberto.');
     $('#bolCopiar2').onclick=()=>copiar('#bolEmails','Texto 2 copiado. Cole no Claude in Chrome com o Gmail aberto.');
-    $('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());toast('Saudação final salva')};
+    $('#bolCopiar3').onclick=()=>copiar('#bolWhats','Texto 3 copiado. Cole no Claude in Chrome com o WhatsApp Web aberto.');
+    const salvarEnvio=()=>{
+      const em=normEmails($('#bDeEmail').value), wv=$('#bDeWhats').value.trim(), wn=wv?normWhats(wv):null;
+      if(em&&em.err){toast(em.err);$('#bDeEmail').focus();return}
+      if(wn&&wn.err){toast(wn.err);$('#bDeWhats').focus();return}
+      cfgFlags={...cfgFlags,envio:{email:em||'',whats:wn||''}};saveCols();
+      if(wn) $('#bDeWhats').value=wn;
+      $('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Contas de envio salvas')};
+    $('#bDeEmail').onchange=salvarEnvio; $('#bDeWhats').onchange=salvarEnvio;
+    $('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Saudação final salva')};
     const salvarCfg=()=>{cfgFlags={...cfgFlags,boleto:{juros:$('#bJuros').value.trim()||BOLETO_PADRAO.juros,multa:$('#bMulta').value.trim()||BOLETO_PADRAO.multa}};saveCols();$('#bolTexto').value=textoBoletos(boletosDoMes());toast('Juros e multa salvos')};
     $('#bJuros').onchange=salvarCfg; $('#bMulta').onchange=salvarCfg;
     // grava e garante o valor novo na linha atual (uma leitura antiga da planilha pode ter chegado no meio)
