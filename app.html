@@ -504,6 +504,7 @@ const DEFAULT_COLS=[
  {key:'cliente',label:'Cliente',type:'text',required:true,locked:true},
  {key:'razao',label:'Razão social',type:'text',required:true},
  {key:'doc',label:'CNPJ / CPF',type:'mono',required:true},
+ {key:'endereco',label:'Endereço (cadastro no banco)',type:'text',off:true},
  {key:'publicacoes',label:'Publicações',type:'text',required:true},
  {key:'valorMensal',label:'Valor do plano',type:'money',required:true},
  {key:'adicionais',label:'Adicionais do mês',type:'calc',items:true},
@@ -661,7 +662,7 @@ const SEM_COB_TIPOS=['parceria','permuta','filantropia','pagoporoutro'];
 const semCobranca=r=>!!r&&SEM_COB_TIPOS.includes(String(r.tipo||'').trim().toLowerCase());
 /* esporádico: sem plano, paga só os adicionais do mês (a assistente recebe só o aviso esporadico=true) */
 const ehEsporadico=r=>!!r&&(String(r.tipo||'').trim().toLowerCase()==='esporadico'||r.esporadico===true);
-const SEM_COB_COLS=['diaEnvio','email','whatsapp','vencimento'];
+const SEM_COB_COLS=['diaEnvio','email','whatsapp','vencimento','endereco'];
 /* não pagante: só nome, tipo, publicações, adicionais e observações ficam ativos; o resto fica vazio (os dados não são apagados) */
 const ATIVOS_SEM_COB=['cliente','tipo','publicacoes','adicionais','obs'];
 /* ---------- grupos: várias contas pagas por uma mensalidade só ----------
@@ -1524,7 +1525,8 @@ function textoBoletos(lista){
     'Espécie do documento: DSI (Duplicata de Serviço por Indicação)',
     `Número do documento: o indicado em cada linha (mês + sequência, ex.: ${refMes.replace('-','')}-01). Não reutilize números já usados neste mês.`,'',
     'Para cada linha abaixo, emita um boleto de cobrança para o pagador (razão social e CNPJ/CPF), com o valor e o vencimento indicados, usando os juros e a multa acima.',
-    autoEnvio()?'Emita todos em sequência, sem me pedir confirmação a cada boleto. Pare e me pergunte só se: o pagador não estiver cadastrado no banco; houver mais de um cadastro para o mesmo CNPJ/CPF e você não souber qual usar; ou o banco mostrar dados diferentes dos da linha. No final, me mostre o resumo: emitidos, pulados e o motivo.'
+    'Se o pagador não estiver cadastrado no banco e a linha trouxer o endereço, cadastre com a razão social, o CNPJ/CPF e esse endereço (se o CEP parecer errado, confirme numa consulta pública do CNPJ)'+(autoEnvio()?', sem me perguntar.':', me mostrando antes de salvar.'),
+    autoEnvio()?'Emita todos em sequência, sem me pedir confirmação a cada boleto. Pare e me pergunte só se: o pagador não estiver cadastrado no banco e a linha não tiver endereço; houver mais de um cadastro para o mesmo CNPJ/CPF e você não souber qual usar; ou o banco mostrar dados diferentes dos da linha. No final, me mostre o resumo: emitidos, pulados e o motivo.'
       :'Antes de emitir cada boleto, me mostre os dados e espere a minha confirmação. Se o pagador não estiver cadastrado no banco, me pergunte antes de cadastrar.',
     'Não faça pagamentos nem transferências.',
     'O pagador é identificado pelo CNPJ/CPF. Se ele estiver cadastrado no banco com um nome mais curto, mas com o mesmo CNPJ/CPF, use esse cadastro normalmente.',
@@ -1534,7 +1536,7 @@ function textoBoletos(lista){
   let n=0, nDoc=docInicio(lista)-1;
   prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
     const nf=notaDoMes(b.r), extra=(b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'')+(nf?` · valor pela NFS-e${nf.num?` nº ${nf.num}`:''}${nf.iss>0?' (líquido, ISS retido pelo cliente)':''}`:'');
-    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}) · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
+    L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente})${valido(b.pag.endereco)?` · endereço: ${b.pag.endereco}`:''} · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
   const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
   if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
   return L.join('\n');
