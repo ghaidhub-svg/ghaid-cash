@@ -5,6 +5,7 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 ## Arquitetura
 - `app.html`: página única (HTML/CSS/JS). Publicada no `main`, o Apps Script busca de
   `https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/main/app.html`. Mudança de tela = editar este arquivo e dar push no `main`.
+- `modulos.js`: janelas e painéis usados só por clique (Boletos, ficha do cliente, plano, nota fiscal, permuta, contrato, adicionais, publicações, colunas, acessos, agrupar). O `app.html` busca este arquivo em `https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/main/modulos.js` logo ao abrir; até ele chegar, essas funções esperam. Funções novas desse tipo vão para o `modulos.js`.
 - `Code.gs`: servidor Apps Script. Funções chamadas pela tela via `google.script.run`: `listar`, `salvarCliente(id, dados, substituir)`, `excluirCliente(id)`, `lerConfig`, `salvarConfig`.
   Mudança aqui exige colar no editor do Apps Script e criar nova versão da implantação (mesmo URL).
 - Dados: planilha "GHAID Cash · Dados" (Drive da conta ghaidhub@gmail.com). Nunca colocar dados de clientes no repositório (ele é público).
@@ -26,9 +27,9 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 - A autorização vale só para o `app.html`. Outros arquivos: perguntar antes.
 
 ## Limites do Apps Script (tela escura)
-- A página fica escura (sem erro visível, só servida pelo Apps Script; no navegador de teste abre normal) quando o JS tem certos trechos que o Apps Script lê errado. Casos confirmados por teste em 09/11/2026:
-  - a sequência `/*` dentro de texto (ex.: `accept='image/*'`); trocar por `image/jpeg,image/png`;
-  - expressão regular com grupo `(?:...)` e parêntese dentro de colchete (ex.: `[^)]*\)`); usar `indexOf`, `startsWith`, `slice`.
-- Regra: no JS, nada de `/*` ou `*/` fora de comentário de verdade, e só expressões regulares simples.
-- Tamanho: não ficou provado que existe limite (o teste com 303 mil bytes foi feito em cima de uma versão já quebrada). 287.994 bytes abriu. Por precaução, manter o `app.html` abaixo de ~288 mil bytes até um teste limpo; se precisar de espaço, tirar comentários e espaços.
-- Depois de publicar, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu e procurar esses trechos no que mudou.
+- O Apps Script deixa a página escura (sem erro visível; no navegador de teste abre normal) em dois casos, confirmados por teste em 09/11/2026:
+  - tamanho: quando o `app.html`, medido como o Google empacota (JSON do texto + 5 por caractere `< > & ' " =`), passa de ~368 mil. Abriu com 367.932; ficou escura com 368.364 e 372.431. Medir com:
+    `node -e "const s=require('fs').readFileSync('app.html','utf8');console.log(JSON.stringify(s).length+5*[...'<>&\'\"='].reduce((t,c)=>t+s.split(c).length-1,0))"`
+    Manter abaixo de 340 mil. Por isso o código das janelas fica no `modulos.js`.
+  - trechos que o Apps Script lê errado: `/*` dentro de texto (ex.: `accept='image/*'`) e expressão regular complexa (`(?:...)`, parêntese dentro de colchete). No JS, nada de `/*` ou `*/` fora de comentário de verdade, e só expressões regulares simples (vale também para o `modulos.js`).
+- Depois de publicar, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu.
