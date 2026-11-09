@@ -24,3 +24,9 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 - Antes de publicar: conferir sintaxe do JS, abrir a página num navegador de teste sem erro no console, checar modo diurno, noturno e tela de celular, e as regras da marca.
 - Se algo quebrar: `git revert` do commit e push no `main` para voltar à versão anterior.
 - A autorização vale só para o `app.html`. Outros arquivos: perguntar antes.
+
+## Limites do Apps Script (tela escura)
+- A página travou (tela escura, sem erro visível) quando o `app.html` passou de cerca de 288 mil bytes e tinha uma expressão regular com grupo `(?:...)`. No navegador de teste abria normal; só travava servida pelo Apps Script.
+- Manter o `app.html` abaixo de 285 mil bytes (`wc -c app.html`). Se precisar de espaço, tirar comentários internos do JS e CSS.
+- Evitar expressões regulares complexas (grupos `(?:`, muitos `\(`); preferir métodos simples de texto (`indexOf`, `startsWith`, `slice`).
+- Depois de publicar mudança grande, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu.
