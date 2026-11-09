@@ -11,13 +11,32 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
-:root{--black:#211E16;--cloud:#F1EFEE;--red:#E01900;--bg:#F1EFEE;--surface:#FFFFFF;--surface-2:#E8E5E3;--line:#D8D3CF;--fg:#211E16;--muted:#6B655B;--accent:#E01900;--accent-fg:#FFFFFF;--accent-soft:#FBE3DE;--warn:#E01900;--alert-text:#E01900;--warn-soft:#FCE7E2;--warn-line:#EFA08F;--bad:#E01900;--bad-soft:#FCE7E2;--good:#5E9F0B;--logo-day:block;--logo-night:none;--art:#E8E5E3;--f-display:"Montserrat", "Segoe UI", system-ui, sans-serif;--f-body:"Montserrat", "Segoe UI", system-ui, sans-serif;--f-mono:"Montserrat", "Segoe UI", system-ui, sans-serif;--r:6px}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#211E16;--surface:#2A261F;--surface-2:#332E26;--line:#463F35;--fg:#F1EFEE;--muted:#A9A299;--accent:#E01900;--accent-fg:#FFFFFF;--accent-soft:#45201A;--warn:#E01900;--alert-text:#F1EFEE;--warn-soft:#3D1A12;--warn-line:#A31400;--bad:#E01900;--bad-soft:#3D1A12;--good:#A3E635;--logo-day:none;--logo-night:block;--art:#2A261F;color-scheme:dark}
+:root{
+  --black:#211E16; --cloud:#F1EFEE; --red:#E01900;
+  --bg:#F1EFEE; --surface:#FFFFFF; --surface-2:#E8E5E3; --line:#D8D3CF; --fg:#211E16; --muted:#6B655B;
+  --accent:#E01900; --accent-fg:#FFFFFF; --accent-soft:#FBE3DE;
+  --warn:#E01900; --alert-text:#E01900; --warn-soft:#FCE7E2; --warn-line:#EFA08F;
+  --bad:#E01900; --bad-soft:#FCE7E2; --good:#5E9F0B;
+  --logo-day:block; --logo-night:none; --art:#E8E5E3;
+  --f-display:"Montserrat", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Montserrat", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"Montserrat", "Segoe UI", system-ui, sans-serif;
+  --r:6px;
 }
-:root[data-theme="dark"]{--bg:#211E16;--surface:#2A261F;--surface-2:#332E26;--line:#463F35;--fg:#F1EFEE;--muted:#A9A299;--accent:#E01900;--accent-fg:#FFFFFF;--accent-soft:#45201A;--warn:#E01900;--alert-text:#F1EFEE;--warn-soft:#3D1A12;--warn-line:#A31400;--bad:#E01900;--bad-soft:#3D1A12;--good:#A3E635;--logo-day:none;--logo-night:block;--art:#2A261F;color-scheme:dark}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#211E16; --surface:#2A261F; --surface-2:#332E26; --line:#463F35; --fg:#F1EFEE; --muted:#A9A299;
+  --accent:#E01900; --accent-fg:#FFFFFF; --accent-soft:#45201A;
+  --warn:#E01900; --alert-text:#F1EFEE; --warn-soft:#3D1A12; --warn-line:#A31400;
+  --bad:#E01900; --bad-soft:#3D1A12; --good:#A3E635;
+  --logo-day:none; --logo-night:block; --art:#2A261F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#211E16; --surface:#2A261F; --surface-2:#332E26; --line:#463F35; --fg:#F1EFEE; --muted:#A9A299;
+  --accent:#E01900; --accent-fg:#FFFFFF; --accent-soft:#45201A;
+  --warn:#E01900; --alert-text:#F1EFEE; --warn-soft:#3D1A12; --warn-line:#A31400;
+  --bad:#E01900; --bad-soft:#3D1A12; --good:#A3E635;
+  --logo-day:none; --logo-night:block; --art:#2A261F; color-scheme:dark}
 [hidden]{display:none!important}
-.logo-day{display:var(--logo-day)}
-.logo-night{display:var(--logo-night)}
+.logo-day{display:var(--logo-day)} .logo-night{display:var(--logo-night)}
 .brand{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0}
 .brand img{width:min(240px,100%);height:auto;max-width:100%;object-fit:contain;flex:none;align-self:flex-start}
 .hdr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -26,8 +45,7 @@
 .iconbtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
 .login{min-height:100vh;display:block;position:relative;background:var(--bg)}
 .corner-mark{position:absolute;top:calc(32px + env(safe-area-inset-top,0px));left:max(32px,env(safe-area-inset-left,0px));width:clamp(56px,7vw,96px);height:auto;max-width:100%;object-fit:contain}
-@media (max-width:600px){.corner-mark{top:calc(20px + env(safe-area-inset-top,0px));left:max(20px,env(safe-area-inset-left,0px));width:48px}
-}
+@media (max-width:600px){.corner-mark{top:calc(20px + env(safe-area-inset-top,0px));left:max(20px,env(safe-area-inset-left,0px));width:48px}}
 .login-side{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding-block:120px 40px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
 .login-box{width:100%;max-width:400px;margin:0;display:flex;flex-direction:column;gap:20px}
 .login-box .brand img{width:min(280px,100%)}
@@ -46,19 +64,15 @@ h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:-.
 .sub{color:var(--muted);font-size:13px;margin-top:2px}
 .sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-.dot.on{background:var(--good)}
-.dot.off{background:var(--bad)}
+.dot.on{background:var(--good)} .dot.off{background:var(--bad)}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .stat{background:var(--surface);padding:18px 22px;min-width:0}
 .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .stat .v{font-family:var(--f-display);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stat.warn .v{color:var(--warn)}
-.stat.bad .v{color:var(--bad)}
+.stat.warn .v{color:var(--warn)} .stat.bad .v{color:var(--bad)}
 button.stat{all:unset;background:var(--surface);padding:18px 22px;cursor:pointer;min-width:0;display:block}
-button.stat:hover{background:var(--surface-2)}
-button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
+button.stat:hover{background:var(--surface-2)} button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:8px}
 .search{flex:1 1 100%;min-width:0;position:relative}
 .search input{width:100%;padding:9px 12px 9px 32px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit}
@@ -83,17 +97,13 @@ th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);pad
 th{position:sticky;top:0;z-index:2;background:var(--surface-2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;white-space:nowrap;user-select:none}
 th .h{display:flex;align-items:center;gap:6px;padding:12px 14px;cursor:pointer}
 th .req{color:var(--warn);font-size:13px;line-height:1}
-th.dragging{opacity:.4}
-th.dropL{box-shadow:inset 3px 0 0 var(--accent)}
-th.dropR{box-shadow:inset -3px 0 0 var(--accent)}
+th.dragging{opacity:.4} th.dropL{box-shadow:inset 3px 0 0 var(--accent)} th.dropR{box-shadow:inset -3px 0 0 var(--accent)}
 th .arrow{font-size:10px;color:var(--accent)}
 .sticky{position:sticky;left:0;z-index:1;background:var(--surface)}
 :root{--tipo-w:64px}
 [data-k="tipo"]{width:var(--tipo-w);min-width:var(--tipo-w);max-width:var(--tipo-w);box-sizing:border-box}
 .sticky[data-k="cliente"]{left:var(--tipo-w)}
-@media (max-width:700px){[data-k="tipo"].sticky{left:auto}
-.sticky[data-k="cliente"]{left:0}
-}
+@media (max-width:700px){[data-k="tipo"].sticky{left:auto}.sticky[data-k="cliente"]{left:0}}
 th.sticky{z-index:3;background:var(--surface-2)}
 td .c{padding:11px 14px;min-height:42px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text}
 td.long .c{white-space:normal;min-width:260px;max-width:360px;font-size:13px;color:var(--muted)}
@@ -112,8 +122,7 @@ td.calc.strong .c{color:var(--fg);font-weight:700}
 tfoot td{position:sticky;bottom:0;z-index:2;background:var(--surface-2);border-top:2px solid var(--fg);font-weight:700}
 tfoot td .c{cursor:default;font-weight:700;color:var(--fg)}
 tfoot td.sticky{z-index:3;background:var(--surface-2)}
-td.calc .c.neg{color:var(--bad)}
-td.calc .c.pos{color:var(--good)}
+td.calc .c.neg{color:var(--bad)} td.calc .c.pos{color:var(--good)}
 td.miss .c{background:var(--warn-soft);color:var(--alert-text);font-size:12px;font-weight:500;box-shadow:inset 0 0 0 1px var(--warn-line)}
 td.miss:not(.ok) .c{font-size:15px;font-weight:700;color:var(--warn)}
 tr:hover td{background-image:linear-gradient(var(--surface-2),var(--surface-2))}
@@ -144,9 +153,7 @@ td.tipo .c{padding:0;display:flex;align-items:stretch;cursor:default}
 .tiposel{flex:1;min-height:42px;min-width:0;width:100%;border:0;background:transparent;color:inherit;font:inherit;padding:0 10px 0 14px;cursor:pointer}
 .tiposel option{color:var(--fg);background:var(--surface)}
 td.tipo .c.livre{color:var(--accent);font-weight:600}
-.so-assist{display:none}
-.assist .so-assist{display:inline}
-.assist .so-dona{display:none!important}
+.so-assist{display:none}.assist .so-assist{display:inline}.assist .so-dona{display:none!important}
 .assist #delBtn{display:none!important}
 .assist .sticky[data-k="cliente"]{left:0}
 td.pubcell .c{cursor:pointer}
@@ -270,8 +277,7 @@ button.kpi[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 
 .hb .t{height:6px;background:transparent;overflow:hidden}
 .hb .b{display:block;height:100%;background:var(--fg);border-radius:0 3px 3px 0;min-width:2px;transition:background .15s}
 .hb:hover .b,.hb:focus-visible .b{background:var(--accent)}
-.hb.other{cursor:default}
-.hb.other .b{background:var(--muted)}
+.hb.other{cursor:default}.hb.other .b{background:var(--muted)}
 .hb.miss .b{background:var(--warn)}
 .hb .n{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
 .cols{display:flex;align-items:flex-end;gap:8px;height:120px;padding-top:18px;border-bottom:1px solid var(--line)}
@@ -288,23 +294,15 @@ button.kpi[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 
 .dv .dn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dv .dd{font-size:10px;color:var(--muted);font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis}
 .dv .dx{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.dv .dx.neg{color:var(--bad)}
-.dv .dx.pos{color:var(--good)}
+.dv .dx.neg{color:var(--bad)} .dv .dx.pos{color:var(--good)}
 .okmsg{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
 .okmsg b{color:var(--good)}
 .tip{position:fixed;z-index:40;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12px;padding:8px 10px;border-radius:6px;max-width:240px;line-height:1.4}
 .tip strong{display:block}
-@media (max-width:1200px){.p7,.p5,.p6{grid-column:span 6}
-}
-@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media (max-width:640px){.p7,.p5,.p6{grid-column:span 12}
-}
-@media (max-width:480px){.kpis{gap:10px}
-.kpi{padding:14px 16px}
-.hb{grid-template-columns:minmax(0,96px) minmax(0,1fr) auto;gap:8px}
-.hb .n{min-width:0}
-}
+@media (max-width:1200px){.p7,.p5,.p6{grid-column:span 6}}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.p7,.p5,.p6{grid-column:span 12}}
+@media (max-width:480px){.kpis{gap:10px}.kpi{padding:14px 16px}.hb{grid-template-columns:minmax(0,96px) minmax(0,1fr) auto;gap:8px}.hb .n{min-width:0}}
 .colbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .colbar .cl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-right:4px}
 .cpill{border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:5px 11px 5px 9px;font:inherit;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
@@ -323,21 +321,6 @@ td.items .c.visto{color:var(--good)}
 td.items .c.sempreco,td.items .c.sempreco .cnt{color:var(--alert-text)}
 td.nfcell .nfwrap{display:flex;align-items:center;justify-content:space-between;gap:8px}
 td.nfcell .nfval.okv{color:var(--good);font-weight:700;display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
-.arqnome{display:flex;align-items:center;gap:8px;min-width:0}
-.mini.olho{width:28px;height:28px;flex:none;color:var(--fg);text-decoration:none}
-.mini.olho svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
-.mini.olho.off{opacity:.4;cursor:default}
-.pmnota{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
-.pmnota .arqnome{flex:1 1 calc(100% - 40px)}
-.pmnota>.mini{order:1}
-.pmnota>input{order:2;flex:1 1 140px;min-width:0;height:32px;padding:0 8px;font:inherit;font-size:12px}
-.pmsaldo{display:grid;grid-template-columns:repeat(5,auto);justify-content:space-between;gap:4px 10px;font-size:12px;white-space:nowrap}
-.pmsaldo .h{font-weight:700;color:var(--muted)}
-.pmsaldo .neg{color:var(--alert-text);font-weight:700}
-.pmsaldo .pos{color:var(--good);font-weight:700}
-@media (max-width:560px){.pmsaldo{grid-template-columns:repeat(3,auto)}
-.pmsaldo .pmx{display:none}
-}
 .pmwrap{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pmval{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 .nfclip{flex:none;width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer;padding:0}
@@ -352,14 +335,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 .itrow input{border:1px solid var(--line);border-radius:6px;padding:9px 10px;font:inherit;background:var(--surface);color:var(--fg);min-width:0;width:100%}
 .itrow.c4,.ithead.c4{grid-template-columns:minmax(0,1fr) 104px 118px 32px}
 .itrow select.sit{height:38px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:12px;font-weight:600;background:var(--surface);color:var(--fg);min-width:0;width:100%;cursor:pointer}
-@media (max-width:560px){.itrow.c4{grid-template-columns:minmax(0,1fr) 96px 32px;grid-template-areas:"d v x" "s s s"}
-.itrow.c4 .d{grid-area:d}
-.itrow.c4 .v{grid-area:v}
-.itrow.c4 .sit{grid-area:s}
-.itrow.c4 .mini{grid-area:x}
-.ithead.c4{grid-template-columns:minmax(0,1fr) 96px 32px}
-.ithead.c4 span:nth-child(3){display:none}
-}
+@media (max-width:560px){.itrow.c4{grid-template-columns:minmax(0,1fr) 96px 32px;grid-template-areas:"d v x" "s s s"}.itrow.c4 .d{grid-area:d}.itrow.c4 .v{grid-area:v}.itrow.c4 .sit{grid-area:s}.itrow.c4 .mini{grid-area:x}.ithead.c4{grid-template-columns:minmax(0,1fr) 96px 32px}.ithead.c4 span:nth-child(3){display:none}}
 .itrow input.v:disabled{background:var(--surface-2);color:var(--muted);font-style:italic}
 .itrow input.v{text-align:right;font-variant-numeric:tabular-nums}
 .itlist{display:flex;flex-direction:column;gap:8px}
@@ -405,11 +381,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 .addcol select{border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;background:var(--surface);color:var(--fg)}
 .toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:var(--r);font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 .notice{background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--fg);border-radius:var(--r);padding:10px 14px;font-size:13px}
-@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}
-.drawer.noanim{animation:none}
-@keyframes slide{from{transform:translateX(24px);opacity:.6}
-}
-}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}.drawer.noanim{animation:none}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
 :root{--r:8px;--ctl:40px;--gap:16px}
 .dash{gap:var(--gap)}
 .kpis,.panels{gap:var(--gap);grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}
@@ -427,11 +399,8 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 .cpill{height:32px;border-radius:var(--r);padding:0 12px}
 .mini{border-radius:calc(var(--r) - 2px)}
 .login-box .btn.primary{height:46px}
-@media (max-width:1200px){.kpis,.panels{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media (max-width:640px){.kpis,.panels{grid-template-columns:minmax(0,1fr)}
-.kpi{min-height:0}
-}
+@media (max-width:1200px){.kpis,.panels{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.kpis,.panels{grid-template-columns:minmax(0,1fr)}.kpi{min-height:0}}
 </style>
 <section class="login" id="loginView" hidden>
 <img class="corner-mark" src="data:image/png;base64,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" alt="" aria-hidden="true">
@@ -813,6 +782,7 @@ if(c.type==='tipo'&&!ASSIST()&&grupo) return `<td class="tipo sticky" data-k="ti
 if(c.type==='tipo'&&!ASSIST()&&conta) return `<td class="tipo sticky" data-k="tipo"><div class="c"><span class="tipobtn tiinfo conta" tabindex="0" data-tip="<strong>Conta do grupo</strong>Paga por ${esc(grupoDe(r).cliente||'')}. Os valores ficam na linha do grupo.">${ICON_CONTA}</span></div></td>`;
 if(c.type==='tipo'&&ASSIST()) return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}" style="padding:11px 14px">${esc(tipoLabel(r.tipo))}</div></td>`;
 if(c.type==='tipo'){const k=tipoChave(r.tipo);return `<td class="tipo sticky" data-k="${c.key}"><div class="c"><button type="button" class="tipobtn${SEM_COB_TIPOS.includes(k)?' livre':''}" data-tipomenu data-tip="<strong>${esc(tipoLabel(k))}</strong>${esc(TIPO_INFO[k].desc)} Clique para trocar." aria-label="Tipo: ${esc(tipoLabel(k))}. Clique para trocar.">${TIPO_INFO[k].icone}</button></div></td>`}
+if(c.type==='tipo_antigo') return `<td class="tipo sticky" data-k="${c.key}"><div class="c${semCobranca(r)?' livre':''}"><select class="tiposel" aria-label="Tipo de ${esc(r.cliente||'cliente')}">${tipoOpts(r[c.key])}</select></div></td>`;
 if(c.type==='simnao'){const sim=ehSim(r[c.key]);return `<td class="ok" data-k="${c.key}"><div class="c${sim?' okv':''}"><select class="snsel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${simNaoOpts(r[c.key])}</select></div></td>`}
 if(c.type==='ok'){const ok=okDe(c,r);return `<td class="ok${ok?'':' miss'}" data-k="${c.key}"><div class="c${ok?' okv':''}"><select class="oksel" aria-label="${esc(c.label)} de ${esc(r.cliente||'cliente')}">${okOpts(ok)}</select></div></td>`}
 const miss=c.required&&c.type!=='calc'&&isEmpty(valorDe(c,r))&&(!ASSIST()||EDITA_ASSIST.includes(c.key));
@@ -867,6 +837,8 @@ if(pmb){e.stopPropagation();abrirPermuta(pmb.closest('tr').dataset.id);return}
 if(ctb||e.target.closest('td[data-k="contrato"]')){e.stopPropagation();abrirContrato((ctb||e.target).closest('tr').dataset.id);return}
 const clip=e.target.closest('[data-nfanexar]');
 if(clip){e.stopPropagation();escolherNota(clip.closest('tr').dataset.id,()=>render());return}
+const nfb=e.target.closest('[data-nfmenu]');
+if(nfb){e.stopPropagation();abrirMenuNF(nfb,nfb.closest('tr').dataset.id);return}
 const tpb=e.target.closest('[data-tipomenu]');
 if(tpb){e.stopPropagation();abrirMenuTipo(tpb,tpb.closest('tr').dataset.id);return}
 const isb=e.target.closest('[data-isento]');
@@ -899,6 +871,18 @@ if(col) setOk(td.parentElement.dataset.id,col,sel.value||null);
 });
 function fecharMenuIsento(){document.querySelector('.ismenu')?.remove();document.removeEventListener('mousedown',foraMenuIsento,true);removeEventListener('scroll',fecharMenuIsento,true)}
 function foraMenuIsento(e){if(!e.target.closest('.ismenu'))fecharMenuIsento()}
+function abrirMenuNF(btn,id){
+fecharMenuIsento();
+const m=document.createElement('div'); m.className='ismenu'; m.setAttribute('role','menu');
+m.innerHTML=`<button type="button" role="menuitem">Não tem nota</button>`;
+document.body.appendChild(m);
+const b=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
+m.style.top=(b.bottom+h+8>innerHeight?Math.max(8,b.top-h-4):b.bottom+4)+'px'; m.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+'px';
+m.querySelector('button').onclick=()=>{fecharMenuIsento();setCampo(id,'valorNF',null,'Nota fiscal: não tem')};
+m.querySelector('button').focus();
+m.addEventListener('keydown',e=>{if(e.key==='Escape'){fecharMenuIsento();btn.focus()}});
+setTimeout(()=>{document.addEventListener('mousedown',foraMenuIsento,true);addEventListener('scroll',fecharMenuIsento,true)},0);
+}
 function abrirMenuTipo(btn,id){
 fecharMenuIsento(); $('#tip').hidden=true;
 const r=rows.find(x=>x.id===id); if(!r) return;
@@ -1554,21 +1538,15 @@ m.innerHTML=`<h3>${esc(titulo)}</h3>${corpo}<div class="dvfoot"><span></span><di
 document.body.append(sc,m);m.querySelector('[data-fechar]').onclick=fecharDivisao;
 m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();fecharDivisao()}});return m;
 }
-const ICON_OLHO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-function valorDaNota(t){const n=lerNota(t);if(isNum(n.liquido))return n.liquido;const u=t.toUpperCase(),k=u.indexOf('VALOR TOTAL DA NOTA');if(k<0)return null;const m=/\d{1,3}(\.\d{3})*,\d{2}/.exec(t.slice(k,k+120));return m?parseMoney(m[0]):null}
-function subirArquivo(pasta,cli,perm){return new Promise(ok=>{const inp=document.createElement('input');inp.type='file';
+function subirArquivo(pasta,cli){return new Promise(ok=>{const inp=document.createElement('input');inp.type='file';
 inp.accept='.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png';
 inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;if(f.size>8e6){toast('Arquivo grande demais (máximo 8 MB).');return}
 toast('Guardando o arquivo no Drive…');
 try{const u=new Uint8Array(await f.arrayBuffer());let b='';for(let k=0;k<u.length;k+=0x8000)b+=String.fromCharCode.apply(null,u.subarray(k,k+0x8000));
-const base={nome:f.name,url:null,data:new Date().toISOString().slice(0,10)};
-if(perm){base.mes=refMes;if(f.type==='application/pdf'){try{base.valor=valorDaNota(await textoDoPdf(u.buffer.slice(0)))}catch(e){}}}
-try{const res=await GA('salvarArquivo',pasta,`${cli} - ${f.name}`,btoa(b),f.type||'');ok({...base,url:res.url})}
-catch(e){toast('Não consegui guardar no Drive. Falta atualizar o Code.gs no Apps Script.');if(perm)ok(base)}}
-catch(e){toast('Não consegui ler o arquivo.')}};
+const res=await GA('salvarArquivo',pasta,`${cli} - ${f.name}`,btoa(b),f.type||'');ok({nome:f.name,url:res.url,data:new Date().toISOString().slice(0,10)})}
+catch(e){toast('Não consegui guardar no Drive. Falta atualizar o Code.gs no Apps Script.')}};
 inp.click()})}
-const olho=a=>a.url?`<a class="mini olho" href="${esc(a.url)}" target="_blank" rel="noopener" title="Ver o arquivo" aria-label="Ver ${esc(a.nome)}">${ICON_OLHO}</a>`:`<span class="mini olho off" title="Arquivo não guardado no Drive">${ICON_OLHO}</span>`;
-const listaArq=l=>l.length?l.map((a,i)=>`<div><span class="arqnome">${olho(a)}${esc(a.nome)}${a.data?` · ${esc(dataBR(a.data))}`:''}</span><button class="mini" type="button" data-rmarq="${i}" title="Tirar da lista" aria-label="Tirar ${esc(a.nome)} da lista">×</button></div>`).join(''):'<div><span>Nenhum arquivo ainda.</span></div>';
+const listaArq=l=>l.length?l.map((a,i)=>`<div><span><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome)}</a>${a.data?` · ${esc(dataBR(a.data))}`:''}</span><button class="mini" type="button" data-rmarq="${i}" title="Tirar da lista" aria-label="Tirar ${esc(a.nome)} da lista">×</button></div>`).join(''):'<div><span>Nenhum arquivo ainda.</span></div>';
 function abrirContrato(id){
 if(!canWrite){toast('Você só tem acesso de leitura.');return}
 const r=rows.find(x=>x.id===id);if(!r)return;
@@ -1592,33 +1570,17 @@ const m=janela(`Permuta · ${r.cliente||''}`,`
 <div class="field"><label>Por mês</label><div class="calcv" id="pmMes"></div></div>
 </div>
 <p class="sub" style="margin:0;font-size:12px">No plano de ${esc(mesLabel(refMes).toLowerCase())}: ${pm>0?`${brl.format(pm)} em permuta`:'sem parte em permuta'}. Para mudar o quanto sai do boleto, use Mudar valor do plano.</p>
-<div class="sec">Notas e documentos</div><p class="sub" style="margin:0;font-size:12px">Em cada nota, confira o mês e o valor. O valor da nota em PDF é lido sozinho.</p><div class="dvprev" id="arqL"></div>
-<div class="sec">Saldo da permuta</div><div id="pmSaldo"></div>`,
+<div class="sec">Notas e documentos</div><div class="dvprev plhist" id="arqL"></div>`,
 `<button class="btn" type="button" id="pmPlano">Mudar valor do plano</button><button class="btn" type="button" id="arqAdd">Anexar documento</button><button class="btn primary" type="button" id="pmSalvar">Salvar</button>`);
-m.style.width='min(600px,calc(100% - 32px))';
 const conta=()=>{const t=parseMoney($('#pmTotal').value),v=parseInt($('#pmVezes').value,10),ini=$('#pmIni').value;
 $('#pmMes').textContent=isNum(t)&&v>0?`${brl.format(r2(t/v))}${/^\d{4}-\d{2}$/.test(ini)?`, até ${mesLabel(shiftMes(ini,v-1)).toLowerCase()}`:''}`:'—'};
 $('#pmTotal').oninput=conta;$('#pmVezes').oninput=conta;$('#pmIni').onchange=conta;conta();
 const atual=()=>lerJSON((rows.find(x=>x.id===id)||{}).permutaInfo)||{};
 const grava=async(o,msg)=>{const vazio=!o.desc&&!isNum(o.total)&&!o.vezes&&!(o.arquivos||[]).length,v=vazio?null:JSON.stringify(o);await setCampo(id,'permutaInfo',v,msg);const a=rows.find(x=>x.id===id);if(a)a.permutaInfo=v;desenha()};
-const combinado=(o,mm)=>{if(isNum(o.total)&&o.vezes>0&&o.inicio){return mm>=o.inicio&&mm<=shiftMes(o.inicio,o.vezes-1)?r2(o.total/o.vezes):0}return permutaNoMes(r,mm)};
-const saldo=()=>{const o=atual(),l=o.arquivos||[],ms=new Set(l.filter(a=>a.mes).map(a=>a.mes));
-if(isNum(o.total)&&o.vezes>0&&o.inicio)for(let k=0;k<o.vezes;k++)ms.add(shiftMes(o.inicio,k));
-const meses=[...ms].sort();if(!meses.length)return '<p class="sub" style="margin:0;font-size:12px">Preencha o valor acordado, as vezes e o mês de início, ou lance o mês e o valor das notas.</p>';
-let ac=0,ate=0;const fx=v=>`<span class="${v<-0.009?'neg':v>0.009?'pos':''}">${v<-0.009?'− ':v>0.009?'+ ':''}${brl.format(Math.abs(v))}</span>`;
-const linhas=meses.map(mm=>{const c=combinado(o,mm),n=r2(l.filter(a=>a.mes===mm&&isNum(a.valor)).reduce((t,a)=>t+a.valor,0)),d=r2(c-n);ac=r2(ac+d);if(mm<=refMes)ate=ac;
-return `<span${mm===refMes?' style="font-weight:700"':''}>${mm.slice(5)}/${mm.slice(0,4)}</span><span class="pmx">${brl.format(c)}</span><span class="pmx">${brl.format(n)}</span>${fx(d)}${fx(ac)}`}).join('');
-return `<div class="pmsaldo"><span class="h">Mês</span><span class="h pmx">Combinado</span><span class="h pmx">Notas</span><span class="h">No mês</span><span class="h">Acumulado</span>${linhas}</div>
-<p class="sub" style="margin:6px 0 0;font-size:12px">Até ${esc(mesLabel(refMes).toLowerCase())}: ${ate<-0.009?`passou do combinado em ${brl.format(-ate)} (compra a acertar).`:ate>0.009?`ainda há ${brl.format(ate)} de permuta a usar.`:'notas iguais ao combinado.'} Contrato inteiro: ${fx(ac)}.</p>`};
-const desenha=()=>{if(!$('#arqL'))return;const l=atual().arquivos||[];
-$('#arqL').innerHTML=l.length?l.map((a,i)=>`<div class="pmnota"><span class="arqnome">${olho(a)}<span>${esc(a.nome)}</span></span><input type="month" data-pmmes="${i}" value="${esc(a.mes||'')}" aria-label="Mês da nota"><input inputmode="decimal" data-pmval="${i}" placeholder="Valor" value="${isNum(a.valor)?moedaTxt(a.valor):''}" aria-label="Valor da nota"><button class="mini" type="button" data-rmarq="${i}" title="Tirar da lista" aria-label="Tirar ${esc(a.nome)} da lista">×</button></div>`).join(''):'<div><span>Nenhuma nota ainda.</span></div>';
-$('#pmSaldo').innerHTML=saldo();
-const muda=(i,campo,v)=>{const o=atual(),n=(o.arquivos||[]).slice();n[i]={...n[i],[campo]:v};grava({...o,arquivos:n},`${r.cliente}: nota da permuta atualizada`)};
-m.querySelectorAll('[data-pmmes]').forEach(x=>x.onchange=()=>muda(+x.dataset.pmmes,'mes',x.value||null));
-m.querySelectorAll('[data-pmval]').forEach(x=>x.onchange=()=>{const v=parseMoney(x.value);if(isNaN(v)){toast('Valor inválido. Use algo como 504,00.');return}muda(+x.dataset.pmval,'valor',v)});
+const desenha=()=>{if(!$('#arqL'))return;const l=atual().arquivos||[];$('#arqL').innerHTML=listaArq(l);
 m.querySelectorAll('[data-rmarq]').forEach(b=>b.onclick=()=>{const n=l.slice();const x=n.splice(+b.dataset.rmarq,1)[0];grava({...atual(),arquivos:n},`${r.cliente}: ${x.nome} tirado da permuta`)})};
 desenha();
-$('#arqAdd').onclick=async()=>{const a=await subirArquivo('Permutas',r.cliente||'cliente',true);const o=atual();grava({...o,arquivos:[...(o.arquivos||[]),a]},`${r.cliente}: documento da permuta anexado`)};
+$('#arqAdd').onclick=async()=>{const a=await subirArquivo('Permutas',r.cliente||'cliente');const o=atual();grava({...o,arquivos:[...(o.arquivos||[]),a]},`${r.cliente}: documento da permuta anexado`)};
 $('#pmPlano').onclick=()=>abrirPlano(id);
 $('#pmSalvar').onclick=async()=>{const t=parseMoney($('#pmTotal').value),v=parseInt($('#pmVezes').value,10);
 if(isNaN(t)){toast('Valor acordado inválido. Use algo como 3.000,00.');$('#pmTotal').focus();return}
