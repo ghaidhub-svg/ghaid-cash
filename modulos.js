@@ -350,9 +350,9 @@ inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;if(f.size>8e
 toast('Guardando o arquivo no Drive…');aoEscolher&&aoEscolher(f.name);
 try{const u=new Uint8Array(await f.arrayBuffer());let b='';for(let k=0;k<u.length;k+=0x8000)b+=String.fromCharCode.apply(null,u.subarray(k,k+0x8000));
 const base={nome:f.name,url:null,data:new Date().toISOString().slice(0,10)};
-if(perm){base.mes=refMes;if(f.type==='application/pdf'){try{base.valor=valorDaNota(await textoDoPdf(u.buffer.slice(0)))}catch(e){}}}
+if(perm){base.mes=refMes;if(f.type==='application/pdf'){try{base.valor=valorDaNota(await textoDoPdf(u.buffer.slice(0)))}catch(e){}}else toast('Foto de nota: digite o valor ao lado. A leitura automática só funciona com PDF.')}
 try{const res=await GA('salvarArquivo',pasta,`${cli} - ${f.name}`,btoa(b),f.type||'');ok({...base,url:res.url})}
-catch(e){toast('Não consegui guardar no Drive. Falta atualizar o Code.gs no Apps Script.');if(perm)ok(base)}}
+catch(e){const msg=String(e&&e.message||e||'');toast(msg.indexOf('salvarArquivo')>=0||msg.indexOf('not found')>=0?'Não consegui guardar no Drive: falta atualizar o Code.gs no Apps Script.':`Não consegui guardar no Drive (${msg.slice(0,90)}). Tire da lista e anexe de novo.`);if(perm)ok(base)}}
 catch(e){toast('Não consegui ler o arquivo.')}};
 inp.click()})}
 const olho=a=>a.url?`<a class="mini olho" href="${esc(a.url)}" target="_blank" rel="noopener" title="Ver o arquivo" aria-label="Ver ${esc(a.nome)}">${ICON_OLHO}</a>`:`<span class="mini olho off" title="Arquivo não guardado no Drive">${ICON_OLHO}</span>`;
