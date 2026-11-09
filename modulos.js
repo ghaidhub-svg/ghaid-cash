@@ -271,7 +271,7 @@ let n=0, nDoc=docInicio(lista)-1;
 prontos.forEach(b=>b.partes.forEach((x,i)=>{n++;nDoc++;
 const nf=notaDoMes(b.r), extra=(b.partes.length>1?` · boleto ${i+1} de ${b.partes.length}${x.rotulo?` (${x.rotulo})`:''}`:'')+(nf?` · valor pela NFS-e${nf.num?` nº ${nf.num}`:''}${nf.iss>0?' (líquido, ISS retido pelo cliente)':''}`:'');
 L.push(`${n}. ${b.pag.razao} · ${b.pag.doc} · ${brl.format(x.valor)} · vencimento ${dataBR(x.venc)}${extra} (cliente: ${b.r.cliente}${nomeBancoDe(b.pag)!==String(b.pag.razao||'').trim()?` · no banco: ${nomeBancoDe(b.pag)}`:''})${valido(b.pag.endereco)?` · endereço: ${b.pag.endereco}`:''} · nº do documento: ${refMes.replace('-','')}-${String(nDoc).padStart(2,'0')} · arquivo esperado: ${nomeArquivo(b,i)}`)}));
-const pend=lista.filter(b=>b.gerar&&!b.disp&&b.faltas.length);
+const pend=lista.filter(b=>b.gerar&&!b.disp&&!b.pago&&b.faltas.length);
 if(pend.length){L.push('','Ainda não gerar (falta informação no GHAID Cash):');pend.forEach(b=>L.push(`- ${b.r.cliente}: falta ${b.faltas.join(', ')}`))}
 return L.join('\n');
 }
@@ -533,7 +533,7 @@ ${conferirBoleto(b).map(c=>`<div class="bolconf"><span>${esc(c.txt)}</span><butt
 <label class="boldiv bolok"><input type="checkbox" data-incluir${b.incluir?' checked':''}> OK para disparar</label>
 ${b.faltas.length&&(b.gerar||b.faltas.includes('adicional sem preço'))?`<div class="bolfalta">Falta: ${esc(b.faltas.join(', '))}</div>`:''}
 ${(nf=>nf?`<div class="bolnota"><span>Nota fiscal${nf.num?` nº ${esc(nf.num)}`:''}: ${brl.format(nf.bruto)}${nf.iss>0?` − ISS retido ${brl.format(nf.iss)}`:''} ${boletoPelaNota(r,nf)!==nf.liquido?` − permuta ${brl.format(permutaNoMes(r))}`:''} = <strong>${brl.format(boletoPelaNota(r,nf))}</strong> no boleto${nf.arquivo?` · <a href="${esc(nf.arquivo)}" target="_blank" rel="noopener">ver PDF</a>`:''}${nf.arqNome?`<br><span class="bolorig">Para o envio, deixe o arquivo ${esc(nf.arqNome)} na pasta ${esc(PASTA_BOLETOS())}.</span>`:''}</span><span class="bolnotabtns"><button class="mini" type="button" data-nota title="Trocar a nota">Trocar</button><button class="mini" type="button" data-semnota title="Tirar a nota deste mês">Remover</button></span></div>`:'')(notaDoMes(r))}
-<div class="bolbtns"><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button>${notaDoMes(r)?'':'<button class="btn bolbtn" type="button" data-nota>Anexar nota fiscal</button>'}</div>
+<div class="bolbtns"><button class="btn bolbtn" type="button" data-pagofora>Já pago por fora</button><button class="btn bolbtn" type="button" data-dividir>${b.div?'Editar divisão em 2 boletos':'Dividir em 2 boletos'}</button>${notaDoMes(r)?'':'<button class="btn bolbtn" type="button" data-nota>Anexar nota fiscal</button>'}</div>
 </div>`;
 };
 shell('Boletos do mês',`
@@ -542,9 +542,10 @@ shell('Boletos do mês',`
 <div class="bolcfg"><div class="field"><label for="bJuros">Juros</label><input id="bJuros" value="${esc(cfg.juros)}"></div><div class="field"><label for="bMulta">Multa</label><input id="bMulta" value="${esc(cfg.multa)}"></div></div>
 ${(n=>n?`<div class="bolaguarda">${n} cobrança(s) com algo para conferir (aviso tracejado no cartão). Confira e clique em Conferido.</div>`:'')(lista.filter(b=>b.gerar&&!b.disp&&conferirBoleto(b).length).length)}
 <div class="sec">Cobranças</div>
-<div class="imp">${lista.filter(b=>b.gerar&&!b.disp).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
+<div class="imp">${lista.filter(b=>b.gerar&&!b.disp&&!b.pago).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
 ${prontos.length?`<div class="bollote"><button class="btn" type="button" id="bolDisparado">Marcar estes ${prontos.length} como disparados</button><span>Use depois de gerar e enviar. Eles saem da lista deste mês e não entram de novo no próximo disparo.</span></div>`:''}
 ${(n=>n.length?`<div class="bolaguarda">Já disparados em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}): ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}<button type="button" data-voltar="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.disp))}
+${(n=>n.length?`<div class="bolaguarda">Pagos por fora em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}), sem boleto: ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}${b.pf?` · ${esc(b.pf)}`:''}<button type="button" data-despago="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.pago&&!b.disp))}
 ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLabel(refMes).toLowerCase())} não aparecem aqui: ${esc(lista.filter(b=>!b.gerar).map(b=>b.r.cliente).join(', '))}.</div>`:''}
 <div class="sec">Envio pelo financeiro</div>
 <label class="boldiv bolok"><input type="checkbox" id="bAuto"${autoEnvio()?' checked':''}> Claude segue sozinho, sem pedir confirmação a cada boleto e mensagem</label>
@@ -578,6 +579,12 @@ catch(e){handleWriteErr(e)}
 if($('#bolDisparado')) $('#bolDisparado').onclick=()=>{const b=$('#bolDisparado');
 if(b.dataset.armed!=='1'){b.dataset.armed='1';b.classList.add('armed');b.textContent=`Confirmar: ${prontos.length} disparados?`;setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.classList.remove('armed');b.textContent=`Marcar estes ${prontos.length} como disparados`}},4000);return}
 marcarDisparo(prontos.map(x=>x.r),true,`${prontos.length} cliente(s) marcados como disparados em ${mesLabel(refMes).toLowerCase()}`)};
+const pagoFora=async(id,forma)=>{const r=rows.find(y=>y.id===id);if(!r)return;const o={...(lerJSON(r.pagoForaMeses)||{})};if(forma===null)delete o[refMes];else o[refMes]=forma;const v=Object.keys(o).length?JSON.stringify(o):null;
+await setCampo(id,'pagoForaMeses',v,forma===null?`${r.cliente} voltou para a lista de disparo`:`${r.cliente}: pago por fora em ${mesLabel(refMes).toLowerCase()}, sem boleto`);const a=rows.find(y=>y.id===id);if(a)a.pagoForaMeses=v;draw()};
+document.querySelectorAll('[data-pagofora]').forEach(x=>x.onclick=()=>{const id=x.closest('.bol').dataset.id,r=rows.find(y=>y.id===id);if(!r)return;
+const m=janela(`Pago por fora · ${r.cliente||''}`,`<p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: este cliente sai do disparo de boletos e dos textos 1, 2 e 3.</p><div class="field"><label for="pfForma">Como pagou</label><select id="pfForma"><option>Pix</option><option>Transferência</option><option>Dinheiro</option><option>Cartão</option><option>Outro</option></select></div><div class="field"><label for="pfObs">Observação (opcional)</label><input id="pfObs" placeholder="Ex.: pagou dia 05/11"></div>`,`<button class="btn primary" type="button" id="pfOk">Confirmar</button>`);
+$('#pfOk').onclick=()=>{const t=[$('#pfForma').value,$('#pfObs').value.trim()].filter(Boolean).join(' · ');fecharDivisao();pagoFora(id,t)}});
+document.querySelectorAll('[data-despago]').forEach(x=>x.onclick=()=>pagoFora(x.dataset.despago,null));
 document.querySelectorAll('[data-voltar]').forEach(x=>x.onclick=()=>{const r=rows.find(y=>y.id===x.dataset.voltar);if(r)marcarDisparo([r],false,`${r.cliente} voltou para a lista de disparo`)});
 const copiar=(sel,msg)=>{const t=$(sel).value;const fb=()=>{const el=$(sel);el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
 try{navigator.clipboard.writeText(t).then(()=>toast(msg),fb)}catch(e){fb()}};

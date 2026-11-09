@@ -1200,11 +1200,11 @@ if(itemsOf(r).some(i=>!isNum(i.valor))) faltas.push('adicional sem preço');
 const partes=partesBoleto(r,div,total);
 if(partes.some(x=>!x.venc)) faltas.push(div?'data do 2º boleto':'Dia de vencimento');
 const esp=ehEsporadico(r), gerar=okNoMes(r); // só entra no texto com OK no Status cobrança deste mês
-const disp=(lerJSON(r.disparoMeses)||[]).includes(refMes), incluir=(lerJSON(r.liberadoMeses)||[]).includes(refMes);
-return {r,pag,total,div,partes,faltas,esp,gerar,disp,incluir};
+const disp=(lerJSON(r.disparoMeses)||[]).includes(refMes), incluir=(lerJSON(r.liberadoMeses)||[]).includes(refMes), pf=(lerJSON(r.pagoForaMeses)||{})[refMes], pago=pf!=null;
+return {r,pag,total,div,partes,faltas,esp,gerar,disp,incluir,pago,pf};
 }).filter(b=>!b.esp||itemsOf(b.r).length>0); // esporádico só aparece no mês em que tem adicional lançado
 }
-const vaiNoTexto=b=>b.gerar&&b.incluir&&!b.disp&&!b.faltas.length;
+const vaiNoTexto=b=>b.gerar&&b.incluir&&!b.disp&&!b.pago&&!b.faltas.length;
 const PASTA_BOLETOS=()=>`Documentos/Boletos GHAID/${refMes}`;
 const envioCfg=()=>({email:(cfgFlags.envio&&cfgFlags.envio.email)||'',whats:(cfgFlags.envio&&cfgFlags.envio.whats)||''});
 const whatsDigitos=w=>{const d=String(String(w||'').split(/[,;\/]| e /)[0]).replace(/\D/g,'');return d?(d.startsWith('55')&&d.length>=12?d:'55'+d.replace(/^0+/,'')):''};
