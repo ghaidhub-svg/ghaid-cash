@@ -26,7 +26,8 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 - A autorização vale só para o `app.html`. Outros arquivos: perguntar antes.
 
 ## Limites do Apps Script (tela escura)
-- A página travou (tela escura, sem erro visível) quando o `app.html` passou de cerca de 288 mil bytes e tinha uma expressão regular com grupo `(?:...)`. No navegador de teste abria normal; só travava servida pelo Apps Script.
-- Manter o `app.html` abaixo de 285 mil bytes (`wc -c app.html`). Se precisar de espaço, tirar comentários internos do JS e CSS.
-- Evitar expressões regulares complexas (grupos `(?:`, muitos `\(`); preferir métodos simples de texto (`indexOf`, `startsWith`, `slice`).
-- Depois de publicar mudança grande, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu.
+- Testado em 09/11/2026: o Apps Script deixa a página escura (sem erro visível) quando o `app.html` passa de cerca de 288 mil bytes. 287.994 abriu; 303.725 (só com enchimento em comentário) ficou escura. No navegador de teste abre normal; só trava servida pelo Apps Script.
+- Manter o `app.html` abaixo de 285 mil bytes (`wc -c app.html`) a cada mudança. Se precisar de espaço, tirar comentários e espaços do JS e CSS.
+- Antes da próxima função grande: dividir o código em arquivos separados carregados à parte (o `app.html` vira só a casca), para o limite deixar de importar.
+- Por precaução, evitar expressões regulares complexas (grupos `(?:`, muitos `\(`); preferir `indexOf`, `startsWith`, `slice`.
+- Depois de publicar, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu.
