@@ -384,6 +384,19 @@ function salvarNota(token, mes, nome, base64) {
   var f = pasta.createFile(Utilities.newBlob(bytes, 'application/pdf', limpo));
   return { url: f.getUrl(), id: f.getId() };
 }
+// Guarda contrato (PDF ou Word), nota ou documento de permuta no Drive: GHAID Cash / Contratos ou Permutas. Devolve o link.
+var PASTAS_ARQ = ['Contratos', 'Permutas'];
+var TIPOS_ARQ = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+function salvarArquivo(token, pasta, nome, base64, mime) {
+  dona_(token);
+  if (PASTAS_ARQ.indexOf(String(pasta)) < 0) throw new Error('Pasta inválida.');
+  var bytes = Utilities.base64Decode(String(base64 || ''));
+  if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw new Error('Arquivo vazio ou grande demais.');
+  var tipo = TIPOS_ARQ.indexOf(String(mime)) >= 0 ? String(mime) : 'application/octet-stream';
+  var limpo = String(nome || 'arquivo').replace(/[\\\/:*?"<>|]+/g, ' ').slice(0, 150);
+  var f = subpasta_(DriveApp.getFolderById(PASTA_ID), String(pasta)).createFile(Utilities.newBlob(bytes, tipo, limpo));
+  return { url: f.getUrl(), id: f.getId() };
+}
 function subpasta_(pai, nome) {
   var it = pai.getFoldersByName(nome);
   return it.hasNext() ? it.next() : pai.createFolder(nome);
