@@ -26,8 +26,9 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 - A autorização vale só para o `app.html`. Outros arquivos: perguntar antes.
 
 ## Limites do Apps Script (tela escura)
-- Testado em 09/11/2026: o Apps Script deixa a página escura (sem erro visível) quando o `app.html` passa de cerca de 288 mil bytes. 287.994 abriu; 303.725 (só com enchimento em comentário) ficou escura. No navegador de teste abre normal; só trava servida pelo Apps Script.
-- Manter o `app.html` abaixo de 285 mil bytes (`wc -c app.html`) a cada mudança. Se precisar de espaço, tirar comentários e espaços do JS e CSS.
-- Antes da próxima função grande: dividir o código em arquivos separados carregados à parte (o `app.html` vira só a casca), para o limite deixar de importar.
-- Por precaução, evitar expressões regulares complexas (grupos `(?:`, muitos `\(`); preferir `indexOf`, `startsWith`, `slice`.
-- Depois de publicar, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu.
+- A página fica escura (sem erro visível, só servida pelo Apps Script; no navegador de teste abre normal) quando o JS tem certos trechos que o Apps Script lê errado. Casos confirmados por teste em 09/11/2026:
+  - a sequência `/*` dentro de texto (ex.: `accept='image/*'`); trocar por `image/jpeg,image/png`;
+  - expressão regular com grupo `(?:...)` e parêntese dentro de colchete (ex.: `[^)]*\)`); usar `indexOf`, `startsWith`, `slice`.
+- Regra: no JS, nada de `/*` ou `*/` fora de comentário de verdade, e só expressões regulares simples.
+- Tamanho: não ficou provado que existe limite (o teste com 303 mil bytes foi feito em cima de uma versão já quebrada). 287.994 bytes abriu. Por precaução, manter o `app.html` abaixo de ~288 mil bytes até um teste limpo; se precisar de espaço, tirar comentários e espaços.
+- Depois de publicar, pedir para a Morghs recarregar com Ctrl+Shift+R e confirmar que abriu. Se ficar escuro, voltar na hora para a última versão que abriu e procurar esses trechos no que mudou.
