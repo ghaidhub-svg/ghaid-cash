@@ -1481,7 +1481,10 @@ function corpoEmail(b){
   const r=b.r, mes=mesLabel(refMes).toLowerCase(), it=itemsOf(r), L=[`Olá, ${r.cliente}!`,'',`Segue em anexo ${b.partes.length>1?'os boletos referentes':'o boleto referente'} a ${mes}.`,'',`Protocolo da cobrança · ${mes}`];
   if(ehGrupo(r)){const cs=contasDe(r).map(c=>c.cliente).filter(Boolean);if(cs.length)L.push(`Contas: ${cs.join(', ')}`)}
   if(!ehEsporadico(r)) L.push(`Plano mensal: ${brl.format(planoValor(r))}`);
-  if(it.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');it.forEach(i=>{const st=sitDe(i);L.push(`• ${i.desc||'Item'}: ${st?SIT_TEXTO[st]:brl.format(isNum(i.valor)?i.valor:0)}`)})}
+  // para o cliente: sem itens pendentes (R$ 0,00 sem situação ou sem preço) e sem anotações internas entre parênteses, como "(verificar ...)"
+  const limpaDesc=d=>String(d||'Item').replace(/\s*\((?:verificar|ver se|conferir|confirmar)[^)]*\)/gi,'').replace(/[\s:]+$/,'').trim()||'Item';
+  const itC=it.filter(i=>sitDe(i)||(isNum(i.valor)&&i.valor>0));
+  if(itC.length){L.push(ehEsporadico(r)?'Serviços do mês:':'Adicionais do mês:');itC.forEach(i=>{const st=sitDe(i);L.push(`• ${limpaDesc(i.desc)}: ${st?SIT_TEXTO[st]:brl.format(i.valor)}`)})}
   const nf=notaDoMes(r);
   if(nf){L.push(`Nota fiscal${nf.num?` nº ${nf.num}`:''}: ${brl.format(nf.bruto)}`);if(nf.iss>0)L.push(`ISS retido por vocês: − ${brl.format(nf.iss)}`);if(boletoPelaNota(r,nf)!==nf.liquido)L.push(`Permuta: − ${brl.format(permutaNoMes(r))}`)}
   L.push(`${nf?'Total do boleto':'Total'}: ${brl.format(b.total)}`);
@@ -1496,7 +1499,7 @@ function textoEmails(lista){
   const L=[`Enviar os boletos por e-mail · ${mesLabel(refMes)}`,'',
     de?`Envie pelo Gmail da conta ${de} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${de}, troque para ela ou pare e me avise. Não envie por outra conta.`
       :'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual conta enviar e não envie por nenhuma outra.',
-    'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+' Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
+    'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'. Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
     'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
     autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada e-mail. Pule (sem enviar) só quem tiver PDF não encontrado ou dúvida sobre o arquivo certo. No final, me mostre o resumo: enviados e pulados, com o motivo.'
       :'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
@@ -1512,7 +1515,7 @@ function textoWhats(lista){
   const L=[`Enviar os boletos por WhatsApp · ${mesLabel(refMes)}`,'',
     de?`Envie pelo WhatsApp Web conectado no número ${de} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado (Configurações → perfil): se não for ${de}, pare e me avise. Não envie por outro número.`
       :'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual número enviar e não envie por nenhum outro.',
-    'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+' Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
+    'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+'. Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
     'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
     autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada mensagem. Pule só quem tiver PDF não encontrado, dúvida sobre o arquivo certo ou número sem WhatsApp. No final, me mostre o resumo: enviados e pulados, com o motivo.'
       :'Antes de enviar cada mensagem, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule esse cliente.',''];
@@ -1767,7 +1770,10 @@ function openBoletos(){
     const marcarDisparo=async(lista2,dentro,msg)=>{
       if(!canWrite){toast('Você só tem acesso de leitura.');return}
       const antes=lista2.map(r=>({id:r.id,antes:copia(r)}));
-      const novos=new Map(lista2.map(r=>{const st=new Set(lerJSON(r.disparoMeses)||[]);dentro?st.add(refMes):st.delete(refMes);const a=[...st].sort();return [r.id,{disparoMeses:a.length?JSON.stringify(a):null}]}));
+      // ao marcar como disparado, o valor deste boleto vira o "último boleto registrado" (base da comparação do mês seguinte)
+      const totais=new Map(boletosDoMes().map(b=>[b.r.id,b.total]));
+      const novos=new Map(lista2.map(r=>{const st=new Set(lerJSON(r.disparoMeses)||[]);dentro?st.add(refMes):st.delete(refMes);const a=[...st].sort(),o={disparoMeses:a.length?JSON.stringify(a):null};
+        if(dentro&&isNum(totais.get(r.id)))o.valorBoleto=totais.get(r.id);return [r.id,o]}));
       lista2.forEach(r=>Object.assign(r,novos.get(r.id))); draw();
       try{await writeMany(lista2.map(r=>[r.id,novos.get(r.id)]));lista2.forEach(r=>{const a=rows.find(x=>x.id===r.id);if(a)Object.assign(a,novos.get(r.id))});draw();oferecerDesfazer(msg,antes)}
       catch(e){handleWriteErr(e)}
