@@ -40,6 +40,7 @@ function doGet() {
 }
 
 function instalar() {
+  soEditor_();
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('SHEET_ID')) {
     props.setProperty('SHEET_ID', SpreadsheetApp.create('GHAID Cash · Dados').getId());
@@ -226,6 +227,14 @@ function dona_(token) {
   return s;
 }
 
+// Funções de manutenção (instalar, redefinirDona) só rodam pelo editor do Apps Script, com a conta dona do projeto.
+// Pela tela (google.script.run) quem chama é o visitante do app, então elas recusam.
+function soEditor_() {
+  var ativo = '', dono = '';
+  try { ativo = Session.getActiveUser().getEmail(); dono = Session.getEffectiveUser().getEmail(); } catch (e) {}
+  if (!ativo || ativo !== dono) throw new Error('SEM_PERMISSAO: rode esta função pelo editor do Apps Script.');
+}
+
 function estado() {
   var u = usuarios_();
   return { temDona: Object.keys(u).some(function (k) { return u[k].papel === 'dona'; }) };
@@ -309,6 +318,7 @@ function encerrarSessoes_(usuario, manter) {
 // Se a dona esquecer a senha: rode esta função no editor do Apps Script.
 // Ela apaga o acesso da dona e, no próximo acesso ao sistema, a tela pede para criar de novo.
 function redefinirDona() {
+  soEditor_();
   var u = usuarios_();
   Object.keys(u).forEach(function (k) { if (u[k].papel === 'dona') { delete u[k]; encerrarSessoes_(k, null); } });
   gravarUsuarios_(u);
