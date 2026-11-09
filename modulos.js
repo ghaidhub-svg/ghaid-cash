@@ -341,11 +341,13 @@ document.body.append(sc,m);m.querySelector('[data-fechar]').onclick=fecharDivisa
 m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();fecharDivisao()}});return m;
 }
 const ICON_OLHO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-function valorDaNota(t){const n=lerNota(t);if(isNum(n.liquido))return n.liquido;const u=t.toUpperCase(),k=u.indexOf('VALOR TOTAL DA NOTA');if(k<0)return null;const m=/\d{1,3}(\.\d{3})*,\d{2}/.exec(t.slice(k,k+120));return m?parseMoney(m[0]):null}
-function subirArquivo(pasta,cli,perm){return new Promise(ok=>{const inp=document.createElement('input');inp.type='file';
+function valorDaNota(t){const n=lerNota(t);if(isNum(n.liquido))return n.liquido;const u=t.toUpperCase(),k=u.indexOf('VALOR TOTAL DA NOTA');if(k<0)return null;const vs=(t.slice(k,k+220).match(/[\d.]+,\d{2}/g)||[]).map(parseMoney).filter(isNum);return vs.length?Math.max(...vs):null}
+const mensalDe=o=>isNum(o.mensal)?o.mensal:(isNum(o.total)&&o.vezes>0?r2(o.total/o.vezes):null);
+const guardando=nome=>{const l=$('#arqL');if(l)l.insertAdjacentHTML('beforeend',`<div class="pmnota"><span class="arqnome"><span class="mini olho off">${ICON_OLHO}</span><span>Guardando ${esc(nome)} no Drive…</span></span></div>`)};
+function subirArquivo(pasta,cli,perm,aoEscolher){return new Promise(ok=>{const inp=document.createElement('input');inp.type='file';
 inp.accept='.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png';
 inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;if(f.size>8e6){toast('Arquivo grande demais (máximo 8 MB).');return}
-toast('Guardando o arquivo no Drive…');
+toast('Guardando o arquivo no Drive…');aoEscolher&&aoEscolher(f.name);
 try{const u=new Uint8Array(await f.arrayBuffer());let b='';for(let k=0;k<u.length;k+=0x8000)b+=String.fromCharCode.apply(null,u.subarray(k,k+0x8000));
 const base={nome:f.name,url:null,data:new Date().toISOString().slice(0,10)};
 if(perm){base.mes=refMes;if(f.type==='application/pdf'){try{base.valor=valorDaNota(await textoDoPdf(u.buffer.slice(0)))}catch(e){}}}
@@ -363,7 +365,7 @@ const grava=async(l,msg)=>{const v=l.length?JSON.stringify(l):null;await setCamp
 const desenha=()=>{if(!$('#arqL'))return;const l=lerJSON((rows.find(x=>x.id===id)||{}).contrato)||[];$('#arqL').innerHTML=listaArq(l);
 m.querySelectorAll('[data-rmarq]').forEach(b=>b.onclick=()=>{const n=l.slice();const x=n.splice(+b.dataset.rmarq,1)[0];grava(n,`${r.cliente}: ${x.nome} tirado da lista`)})};
 desenha();
-$('#arqAdd').onclick=async()=>{const a=await subirArquivo('Contratos',r.cliente||'cliente');const l=lerJSON((rows.find(x=>x.id===id)||{}).contrato)||[];grava([...l,a],`${r.cliente}: contrato anexado`)};
+$('#arqAdd').onclick=async()=>{const a=await subirArquivo('Contratos',r.cliente||'cliente',false,guardando);const l=lerJSON((rows.find(x=>x.id===id)||{}).contrato)||[];grava([...l,a],`${r.cliente}: contrato anexado`)};
 }
 function abrirPermuta(id){
 if(!canWrite){toast('Você só tem acesso de leitura.');return}
@@ -372,10 +374,10 @@ const pi=lerJSON(r.permutaInfo)||{}, pm=permutaNoMes(r);
 const m=janela(`Permuta · ${r.cliente||''}`,`
 <div class="field"><label for="pmDesc">Do que é a permuta</label><textarea id="pmDesc" rows="3" placeholder="Ex.: mercadoria, serviço, produtos, o que foi combinado">${esc(pi.desc||'')}</textarea></div>
 <div class="dvdatas">
-<div class="field"><label for="pmTotal">Valor acordado (total)</label><input id="pmTotal" inputmode="decimal" placeholder="0,00" value="${isNum(pi.total)?moedaTxt(pi.total):''}"></div>
-<div class="field"><label for="pmVezes">Em quantas vezes</label><input id="pmVezes" inputmode="numeric" placeholder="Ex.: 6" value="${esc(pi.vezes||'')}"></div>
+<div class="field"><label for="pmTotal">Valor por mês</label><input id="pmTotal" inputmode="decimal" placeholder="0,00" value="${isNum(mensalDe(pi))?moedaTxt(mensalDe(pi)):''}"></div>
+<div class="field"><label for="pmVezes">Meses de contrato</label><input id="pmVezes" inputmode="numeric" placeholder="Ex.: 12" value="${esc(pi.vezes||'')}"></div>
 <div class="field"><label for="pmIni">A partir de</label><input id="pmIni" type="month" value="${esc(pi.inicio||refMes)}"></div>
-<div class="field"><label>Por mês</label><div class="calcv" id="pmMes"></div></div>
+<div class="field"><label>Total do contrato</label><div class="calcv" id="pmMes"></div></div>
 </div>
 <p class="sub" style="margin:0;font-size:12px">No plano de ${esc(mesLabel(refMes).toLowerCase())}: ${pm>0?`${brl.format(pm)} em permuta`:'sem parte em permuta'}. Para mudar o quanto sai do boleto, use Mudar valor do plano.</p>
 <div class="sec">Notas e documentos</div><p class="sub" style="margin:0;font-size:12px">Em cada nota, confira o mês e o valor. O valor da nota em PDF é lido sozinho.</p><div class="dvprev" id="arqL"></div>
@@ -383,13 +385,13 @@ const m=janela(`Permuta · ${r.cliente||''}`,`
 `<button class="btn" type="button" id="pmPlano">Mudar valor do plano</button><button class="btn" type="button" id="arqAdd">Anexar documento</button><button class="btn primary" type="button" id="pmSalvar">Salvar</button>`);
 m.style.width='min(600px,calc(100% - 32px))';
 const conta=()=>{const t=parseMoney($('#pmTotal').value),v=parseInt($('#pmVezes').value,10),ini=$('#pmIni').value;
-$('#pmMes').textContent=isNum(t)&&v>0?`${brl.format(r2(t/v))}${/^\d{4}-\d{2}$/.test(ini)?`, até ${mesLabel(shiftMes(ini,v-1)).toLowerCase()}`:''}`:'—'};
+$('#pmMes').textContent=isNum(t)&&v>0?`${brl.format(r2(t*v))}${/^\d{4}-\d{2}$/.test(ini)?`, até ${mesLabel(shiftMes(ini,v-1)).toLowerCase()}`:''}`:'—'};
 $('#pmTotal').oninput=conta;$('#pmVezes').oninput=conta;$('#pmIni').onchange=conta;conta();
 const atual=()=>lerJSON((rows.find(x=>x.id===id)||{}).permutaInfo)||{};
-const grava=async(o,msg)=>{const vazio=!o.desc&&!isNum(o.total)&&!o.vezes&&!(o.arquivos||[]).length,v=vazio?null:JSON.stringify(o);await setCampo(id,'permutaInfo',v,msg);const a=rows.find(x=>x.id===id);if(a)a.permutaInfo=v;desenha()};
-const combinado=(o,mm)=>{if(isNum(o.total)&&o.vezes>0&&o.inicio){return mm>=o.inicio&&mm<=shiftMes(o.inicio,o.vezes-1)?r2(o.total/o.vezes):0}return permutaNoMes(r,mm)};
+const grava=async(o,msg)=>{const vazio=!o.desc&&!isNum(mensalDe(o))&&!o.vezes&&!(o.arquivos||[]).length,v=vazio?null:JSON.stringify(o);await setCampo(id,'permutaInfo',v,msg);const a=rows.find(x=>x.id===id);if(a)a.permutaInfo=v;desenha()};
+const combinado=(o,mm)=>{const v=mensalDe(o);if(isNum(v)&&o.inicio){return mm>=o.inicio&&(!(o.vezes>0)||mm<=shiftMes(o.inicio,o.vezes-1))?v:0}return permutaNoMes(r,mm)};
 const saldo=()=>{const o=atual(),l=o.arquivos||[],ms=new Set(l.filter(a=>a.mes).map(a=>a.mes));
-if(isNum(o.total)&&o.vezes>0&&o.inicio)for(let k=0;k<o.vezes;k++)ms.add(shiftMes(o.inicio,k));
+if(isNum(mensalDe(o))&&o.inicio)for(let k=0;k<(o.vezes>0?o.vezes:1);k++)ms.add(shiftMes(o.inicio,k));
 const meses=[...ms].sort();if(!meses.length)return '<p class="sub" style="margin:0;font-size:12px">Preencha o valor acordado, as vezes e o mês de início, ou lance o mês e o valor das notas.</p>';
 let ac=0,ate=0;const fx=v=>`<span class="${v<-0.009?'neg':v>0.009?'pos':''}">${v<-0.009?'− ':v>0.009?'+ ':''}${brl.format(Math.abs(v))}</span>`;
 const linhas=meses.map(mm=>{const c=combinado(o,mm),n=r2(l.filter(a=>a.mes===mm&&isNum(a.valor)).reduce((t,a)=>t+a.valor,0)),d=r2(c-n);ac=r2(ac+d);if(mm<=refMes)ate=ac;
@@ -404,11 +406,11 @@ m.querySelectorAll('[data-pmmes]').forEach(x=>x.onchange=()=>muda(+x.dataset.pmm
 m.querySelectorAll('[data-pmval]').forEach(x=>x.onchange=()=>{const v=parseMoney(x.value);if(isNaN(v)){toast('Valor inválido. Use algo como 504,00.');return}muda(+x.dataset.pmval,'valor',v)});
 m.querySelectorAll('[data-rmarq]').forEach(b=>b.onclick=()=>{const n=l.slice();const x=n.splice(+b.dataset.rmarq,1)[0];grava({...atual(),arquivos:n},`${r.cliente}: ${x.nome} tirado da permuta`)})};
 desenha();
-$('#arqAdd').onclick=async()=>{const a=await subirArquivo('Permutas',r.cliente||'cliente',true);const o=atual();grava({...o,arquivos:[...(o.arquivos||[]),a]},`${r.cliente}: documento da permuta anexado`)};
+$('#arqAdd').onclick=async()=>{const a=await subirArquivo('Permutas',r.cliente||'cliente',true,guardando);const o=atual();grava({...o,arquivos:[...(o.arquivos||[]),a]},`${r.cliente}: documento da permuta anexado`)};
 $('#pmPlano').onclick=()=>abrirPlano(id);
 $('#pmSalvar').onclick=async()=>{const t=parseMoney($('#pmTotal').value),v=parseInt($('#pmVezes').value,10);
-if(isNaN(t)){toast('Valor acordado inválido. Use algo como 3.000,00.');$('#pmTotal').focus();return}
-const o={...atual(),desc:$('#pmDesc').value.trim(),total:isNum(t)?t:null,vezes:v>0?v:null,inicio:$('#pmIni').value||null};
+if(isNaN(t)){toast('Valor por mês inválido. Use algo como 504,00.');$('#pmTotal').focus();return}
+const o={...atual(),desc:$('#pmDesc').value.trim(),mensal:isNum(t)?t:null,total:null,vezes:v>0?v:null,inicio:$('#pmIni').value||null};
 fecharDivisao();await grava(o,`${r.cliente}: permuta salva`)};
 }
 function abrirDivisao(id,aoSalvar){
