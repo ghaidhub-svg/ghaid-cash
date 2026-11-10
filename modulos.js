@@ -218,36 +218,23 @@ L.push('',emailFim(),'',b.partes.length>1?'Os boletos poderão ser enviados a pr
 return L.join('\n');
 }
 function textoEmails(lista){
-const prontos=lista.filter(vaiNoTexto), comEmail=prontos.filter(emailDe), semEmail=prontos.filter(b=>!emailDe(b));
-const de=envioCfg().email;
-const L=[`Enviar os boletos por e-mail · ${mesLabel(refMes)}`,'',
-de?`Envie pelo Gmail da conta ${de} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${de}, troque para ela ou pare e me avise. Não envie por outra conta.`
-:'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual conta enviar e não envie por nenhuma outra.',
-'Para cada cliente abaixo, crie um e-mail novo com o destinatário, o assunto e o texto indicados, e anexe o(s) PDF(s) indicado(s), que estão na pasta '+PASTA_BOLETOS()+'. Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
-'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
-autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada e-mail. Pule (sem enviar) só quem tiver PDF não encontrado ou dúvida sobre o arquivo certo. No final, me mostre o resumo: enviados e pulados, com o motivo.'
-:'Antes de enviar cada e-mail, me mostre e espere a minha confirmação. Se algum PDF não for encontrado, me avise e não envie esse e-mail.',''];
-comEmail.forEach((b,n)=>{
-L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Para: ${emailDe(b)}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`,
-`Anexar: ${anexosDe(b)}`,'Texto:',corpoEmail(b),'');
-});
-if(semEmail.length){L.push('Sem e-mail cadastrado (não enviar, cadastre o e-mail no GHAID Cash):');semEmail.forEach(b=>L.push(`- ${b.r.cliente}`))}
-return L.join('\n');
-}
-function textoWhats(lista){
-const prontos=lista.filter(vaiNoTexto), com=prontos.filter(whatsDe), sem=prontos.filter(b=>!whatsDe(b)), de=envioCfg().whats;
-const L=[`Enviar os boletos por WhatsApp · ${mesLabel(refMes)}`,'',
-de?`Envie pelo WhatsApp Web conectado no número ${de} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado (Configurações → perfil): se não for ${de}, pare e me avise. Não envie por outro número.`
-:'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de começar, me pergunte por qual número enviar e não envie por nenhum outro.',
-'Para cada cliente abaixo, abra a conversa pelo link indicado, escreva a mensagem e anexe o(s) PDF(s) indicado(s) como documento, que estão na pasta '+PASTA_BOLETOS()+'. Quando houver nota fiscal, ela também está nessa pasta e vai junto com o boleto do mesmo cliente.',
-'Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador cadastrado no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1).',
-autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada mensagem. Pule só quem tiver PDF não encontrado, dúvida sobre o arquivo certo ou número sem WhatsApp. No final, me mostre o resumo: enviados e pulados, com o motivo.'
-:'Antes de enviar cada mensagem, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule esse cliente.',''];
-com.forEach((b,n)=>{
-L.push(`--- ${n+1}. ${b.r.cliente} ---`,`WhatsApp: ${whatsDe(b)} · abrir: https://web.whatsapp.com/send?phone=${whatsDigitos(whatsDe(b))}`,
-`Anexar: ${anexosDe(b)}`,'Mensagem:',corpoEmail(b),'');
-});
-if(sem.length){L.push('Sem WhatsApp cadastrado (não enviar por aqui):');sem.forEach(b=>L.push(`- ${b.r.cliente}`))}
+const prontos=lista.filter(vaiNoTexto), com=prontos.filter(b=>emailDe(b)||whatsDe(b)), sem=prontos.filter(b=>!emailDe(b)&&!whatsDe(b)), cfg=envioCfg();
+const L=[`Enviar os boletos por e-mail e WhatsApp · ${mesLabel(refMes)}`,'',
+cfg.email?`E-mail: envie pelo Gmail da conta ${cfg.email} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${cfg.email}, troque para ela ou pare e me avise.`
+:'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de enviar e-mails, me pergunte por qual conta enviar.',
+cfg.whats?`WhatsApp: envie pelo WhatsApp Web conectado no número ${cfg.whats} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado: se não for ${cfg.whats}, pare e me avise.`
+:'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de enviar por WhatsApp, me pergunte por qual número enviar.',
+'Não envie por outra conta nem por outro número.',
+'Para cada cliente abaixo, envie pelo(s) canal(is) indicado(s) na linha "Enviar por". E-mail: crie um e-mail novo com o destinatário, o assunto e a mensagem, com os anexos. WhatsApp: abra a conversa pelo link, anexe os PDFs como documento e envie a mensagem. Quando o cliente tiver os dois, envie pelos dois.',
+'Os anexos estão na pasta '+PASTA_BOLETOS()+'. Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1). Quando houver nota fiscal, ela vai junto com o boleto do mesmo cliente.',
+autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada envio. Pule só quem tiver PDF não encontrado, dúvida sobre o arquivo certo ou número sem WhatsApp. No final, me mostre o resumo por cliente: enviado por e-mail, enviado por WhatsApp, pulado e o motivo.'
+:'Antes de cada envio, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule. No final, me mostre o resumo por cliente.',''];
+com.forEach((b,n)=>{const e=emailDe(b),w=whatsDe(b);
+L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Enviar por: ${e&&w?'e-mail e WhatsApp':e?'e-mail':'WhatsApp'}`);
+if(e)L.push(`E-mail para: ${e}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`);
+if(w)L.push(`WhatsApp: ${w} · abrir: https://web.whatsapp.com/send?phone=${whatsDigitos(w)}`);
+L.push(`Anexar: ${anexosDe(b)}`,'Mensagem:',corpoEmail(b),'')});
+if(sem.length){L.push('Sem e-mail e sem WhatsApp cadastrados (não enviar, cadastre no GHAID Cash):');sem.forEach(b=>L.push(`- ${b.r.cliente}`))}
 return L.join('\n');
 }
 function textoBoletos(lista){
@@ -310,7 +297,7 @@ $('#nfLiq').textContent=ok?brl.format(boletoPelaNota(r,{bruto:b,liquido:r2(b-i)}
 const av=[];
 if(ok&&isNum(bruto)&&Math.abs(b-bruto)>0.009&&Math.abs(b-(bruto+pm))>0.009) av.push(`A nota não bate com plano + adicionais do mês (${brl.format(bruto)}).`);
 if(lido.cnpj&&soDig(lido.cnpj)!==soDig(pag.doc)) av.push(`A nota está no CNPJ/CPF ${lido.cnpj}, e o pagador é ${pag.doc||'sem CNPJ'}.`);
-$('#nfAviso').textContent=av.join(' ')||'O boleto e os textos 1, 2 e 3 passam a usar o valor do boleto acima.';
+$('#nfAviso').textContent=av.join(' ')||'O boleto e os textos 1 e 2 passam a usar o valor do boleto acima.';
 $('#nfAviso').style.color=av.length?'var(--alert-text)':''};
 $('#nfBruto').oninput=conta; $('#nfIss').oninput=conta; conta();
 $('#nfCancel').onclick=fecharDivisao;
@@ -555,14 +542,11 @@ ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLa
 <p class="sub" style="margin:0;font-size:12px">Os PDFs vão para <strong>${esc(PASTA_BOLETOS())}</strong>. Antes de colar: crie essa pasta e, no Chrome (chrome://settings/downloads), mude o Local para ela, com "Perguntar onde salvar" desligado.</p>
 <textarea class="emailbox" id="bolTexto" readonly>${esc(textoBoletos(lista))}</textarea>
 <div><button class="btn" id="bolCopiar" type="button">Copiar texto 1</button></div>
-<div class="sec">2. Texto para enviar os e-mails (Claude in Chrome no Gmail, depois de gerar)</div>
+<div class="sec">2. Texto para enviar por e-mail e WhatsApp (Claude in Chrome, com o Gmail e o WhatsApp Web abertos, depois de gerar)</div>
 <p class="sub" style="margin:0;font-size:12px">O fim da mensagem vale para o e-mail e para o WhatsApp.</p>
 <div class="field"><label for="bFim">Saudação final do e-mail</label><textarea id="bFim" rows="3">${esc(emailFim())}</textarea></div>
 <textarea class="emailbox" id="bolEmails" readonly>${esc(textoEmails(lista))}</textarea>
-<div><button class="btn" id="bolCopiar2" type="button">Copiar texto 2</button></div>
-<div class="sec">3. Texto para enviar pelo WhatsApp (Claude in Chrome no WhatsApp Web, depois de gerar)</div>
-<textarea class="emailbox" id="bolWhats" readonly>${esc(textoWhats(lista))}</textarea>
-<div><button class="btn" id="bolCopiar3" type="button">Copiar texto 3</button></div>`,
+<div><button class="btn" id="bolCopiar2" type="button">Copiar texto 2</button></div>`,
 `<span></span><div style="display:flex;gap:8px"><button class="btn" id="bolFechar" type="button">Fechar</button></div>`);
 painelVivo=draw;
 $('#bolFechar').onclick=closeDrawer;
@@ -582,25 +566,24 @@ marcarDisparo(prontos.map(x=>x.r),true,`${prontos.length} cliente(s) marcados co
 const pagoFora=async(id,forma)=>{const r=rows.find(y=>y.id===id);if(!r)return;const o={...(lerJSON(r.pagoForaMeses)||{})};if(forma===null)delete o[refMes];else o[refMes]=forma;const v=Object.keys(o).length?JSON.stringify(o):null;
 await setCampo(id,'pagoForaMeses',v,forma===null?`${r.cliente} voltou para a lista de disparo`:`${r.cliente}: pago por fora em ${mesLabel(refMes).toLowerCase()}, sem boleto`);const a=rows.find(y=>y.id===id);if(a)a.pagoForaMeses=v;draw()};
 document.querySelectorAll('[data-pagofora]').forEach(x=>x.onclick=()=>{const id=x.closest('.bol').dataset.id,r=rows.find(y=>y.id===id);if(!r)return;
-const m=janela(`Pago por fora · ${r.cliente||''}`,`<p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: este cliente sai do disparo de boletos e dos textos 1, 2 e 3.</p><div class="field"><label for="pfForma">Como pagou</label><select id="pfForma"><option>Pix</option><option>Transferência</option><option>Dinheiro</option><option>Cartão</option><option>Outro</option></select></div><div class="field"><label for="pfObs">Observação (opcional)</label><input id="pfObs" placeholder="Ex.: pagou dia 05/11"></div>`,`<button class="btn primary" type="button" id="pfOk">Confirmar</button>`);
+const m=janela(`Pago por fora · ${r.cliente||''}`,`<p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: este cliente sai do disparo de boletos e dos textos 1 e 2.</p><div class="field"><label for="pfForma">Como pagou</label><select id="pfForma"><option>Pix</option><option>Transferência</option><option>Dinheiro</option><option>Cartão</option><option>Outro</option></select></div><div class="field"><label for="pfObs">Observação (opcional)</label><input id="pfObs" placeholder="Ex.: pagou dia 05/11"></div>`,`<button class="btn primary" type="button" id="pfOk">Confirmar</button>`);
 $('#pfOk').onclick=()=>{const t=[$('#pfForma').value,$('#pfObs').value.trim()].filter(Boolean).join(' · ');fecharDivisao();pagoFora(id,t)}});
 document.querySelectorAll('[data-despago]').forEach(x=>x.onclick=()=>pagoFora(x.dataset.despago,null));
 document.querySelectorAll('[data-voltar]').forEach(x=>x.onclick=()=>{const r=rows.find(y=>y.id===x.dataset.voltar);if(r)marcarDisparo([r],false,`${r.cliente} voltou para a lista de disparo`)});
 const copiar=(sel,msg)=>{const t=$(sel).value;const fb=()=>{const el=$(sel);el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
 try{navigator.clipboard.writeText(t).then(()=>toast(msg),fb)}catch(e){fb()}};
 $('#bolCopiar').onclick=()=>copiar('#bolTexto','Texto 1 copiado. Cole no Claude in Chrome com o Sicredi aberto.');
-$('#bolCopiar2').onclick=()=>copiar('#bolEmails','Texto 2 copiado. Cole no Claude in Chrome com o Gmail aberto.');
-$('#bolCopiar3').onclick=()=>copiar('#bolWhats','Texto 3 copiado. Cole no Claude in Chrome com o WhatsApp Web aberto.');
+$('#bolCopiar2').onclick=()=>copiar('#bolEmails','Texto 2 copiado. Cole no Claude in Chrome com o Gmail e o WhatsApp Web abertos.');
 const salvarEnvio=()=>{
 const em=normEmails($('#bDeEmail').value), wv=$('#bDeWhats').value.trim(), wn=wv?normWhats(wv):null;
 if(em&&em.err){toast(em.err);$('#bDeEmail').focus();return}
 if(wn&&wn.err){toast(wn.err);$('#bDeWhats').focus();return}
 cfgFlags={...cfgFlags,envio:{email:em||'',whats:wn||''}};saveCols();
 if(wn) $('#bDeWhats').value=wn;
-$('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Contas de envio salvas')};
-$('#bAuto').onchange=e=>{cfgFlags={...cfgFlags,autoEnvio:e.target.checked};saveCols();const l=boletosDoMes();$('#bolTexto').value=textoBoletos(l);$('#bolEmails').value=textoEmails(l);$('#bolWhats').value=textoWhats(l);toast(e.target.checked?'Claude vai seguir sozinho nos textos 1, 2 e 3':'Claude vai pedir confirmação a cada um')};
+$('#bolEmails').value=textoEmails(boletosDoMes());toast('Contas de envio salvas')};
+$('#bAuto').onchange=e=>{cfgFlags={...cfgFlags,autoEnvio:e.target.checked};saveCols();const l=boletosDoMes();$('#bolTexto').value=textoBoletos(l);$('#bolEmails').value=textoEmails(l);toast(e.target.checked?'Claude vai seguir sozinho nos textos 1 e 2':'Claude vai pedir confirmação a cada um')};
 $('#bDeEmail').onchange=salvarEnvio; $('#bDeWhats').onchange=salvarEnvio;
-$('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());$('#bolWhats').value=textoWhats(boletosDoMes());toast('Saudação final salva')};
+$('#bFim').onchange=()=>{const v=$('#bFim').value.trim();cfgFlags={...cfgFlags,emailFim:v&&v!==EMAIL_FIM_PADRAO?v:''};saveCols();$('#bolEmails').value=textoEmails(boletosDoMes());toast('Saudação final salva')};
 const salvarCfg=()=>{cfgFlags={...cfgFlags,boleto:{juros:$('#bJuros').value.trim()||BOLETO_PADRAO.juros,multa:$('#bMulta').value.trim()||BOLETO_PADRAO.multa}};saveCols();$('#bolTexto').value=textoBoletos(boletosDoMes());toast('Juros e multa salvos')};
 $('#bJuros').onchange=salvarCfg; $('#bMulta').onchange=salvarCfg;
 $('#bDocProx').onchange=()=>{const m=/(\d+)\s*$/.exec($('#bDocProx').value), v=m?parseInt(m[1],10):NaN;
