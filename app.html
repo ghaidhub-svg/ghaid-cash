@@ -831,6 +831,7 @@ if(c.items){const it=itemsOf(r);
 const semP=it.filter(i=>!sitDe(i)&&!isNum(i.valor)).length, visto=it.length>0&&!semP;
 return `<td class="${cls} items" data-k="${c.key}"><div class="c${it.length?'':' empty'}${visto?' visto':''}${semP?' sempreco':''}" title="${esc(it.map(i=>i.desc+': '+(sitDe(i)?SIT_TEXTO[sitDe(i)]:isNum(i.valor)?brl.format(i.valor):'sem preço')).join(' · ')||'Clique para lançar adicionais')}">${it.length?esc(txt)+`<span class="cnt">${it.length} ${it.length>1?'itens':'item'}${semP?` · ${semP} sem preço`:''}</span>`:'+ adicionar'}</div></td>`}
 if(ehIsento(r[c.key])) extra+=' isento';
+if(c.key==='totalMes'&&!ASSIST()&&!ehEsporadico(r)&&permutaNoMes(r)>0&&isNum(CALC.totalMes(r))){const pm=permutaNoMes(r),t=CALC.totalMes(r);return `<td class="${cls} temperm" data-k="${c.key}"><div class="c${extra}" title="No boleto: ${esc(brl.format(t))} · Permuta: ${esc(brl.format(pm))} · Total com permuta: ${esc(brl.format(t+pm))}">${esc(txt)}<span class="perm">+ ${esc(brl.format(pm))} permuta · total ${esc(brl.format(t+pm))}</span></div></td>`}
 return `<td class="${cls}${seta?' hasis':''}" data-k="${c.key}"><div class="c${extra}" title="${esc(miss?'Falta preencher':txt)}">${miss?'?':esc(txt)}</div>${seta}</td>`;
 }).join('')+'</tr>';
 }).join('');
