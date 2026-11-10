@@ -214,7 +214,7 @@ if(nf){L.push(`Nota fiscal${nf.num?` nº ${nf.num}`:''}: ${brl.format(nf.bruto)}
 L.push(`${nf?'Total do boleto':'Total'}: ${brl.format(b.total)}`);
 if(b.partes.length>1) b.partes.forEach((x,i)=>L.push(`Boleto ${i+1} de ${b.partes.length}: ${brl.format(x.valor)}, vencimento ${dataBR(x.venc)}`));
 else L.push(`Vencimento: ${dataBR(b.partes[0].venc)}`);
-L.push('',emailFim());
+L.push('',emailFim(),'',b.partes.length>1?'Os boletos poderão ser enviados a protesto 5 dias úteis após o vencimento.':'Este boleto poderá ser enviado a protesto 5 dias úteis após o vencimento.');
 return L.join('\n');
 }
 function textoEmails(lista){
