@@ -401,3 +401,55 @@ function subpasta_(pai, nome) {
   var it = pai.getFoldersByName(nome);
   return it.hasNext() ? it.next() : pai.createFolder(nome);
 }
+
+/* ---------- Banco: extrato da conta corrente Sicredi (só a dona) ---------- */
+var CAB_BANCO = ['id', 'data', 'descricao', 'documento', 'tipo', 'valor', 'saldo', 'contraparte_cpf_cnpj', 'contraparte_nome', 'mes_ref', 'cliente_id', 'importado_em'];
+var CAB_BANCO_IMP = ['importado_em', 'periodo_de', 'periodo_ate', 'qtd_lancamentos', 'novos', 'saldo_inicial', 'total_entradas', 'total_saidas', 'saldo_final', 'validacao_saldo'];
+function linhasObj_(t, nums) {
+  return t.rows.filter(function (r) { return r[0] !== ''; }).map(function (r) {
+    var o = {};
+    t.h.forEach(function (k, i) {
+      var v = r[i];
+      o[k] = (v === '' || v === null) ? null : (nums.indexOf(k) >= 0 ? Number(String(v).replace(',', '.')) : String(v));
+    });
+    return o;
+  });
+}
+function lerBanco(token) {
+  dona_(token);
+  return {
+    lanc: linhasObj_(tabela_(aba_('Banco', CAB_BANCO)), ['valor', 'saldo']),
+    imp: linhasObj_(tabela_(aba_('Banco Importacoes', CAB_BANCO_IMP)), ['qtd_lancamentos', 'novos', 'saldo_inicial', 'total_entradas', 'total_saidas', 'saldo_final'])
+  };
+}
+function importarBanco(token, linhas, resumo) {
+  dona_(token);
+  if (!Array.isArray(linhas) || linhas.length > 3000) throw new Error('Extrato inválido.');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var s = aba_('Banco', CAB_BANCO), t = tabela_(s), ja = {}, novas = [];
+    t.rows.forEach(function (r) { ja[String(r[0])] = true; });
+    var agora = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd HH:mm');
+    linhas.forEach(function (l) {
+      var id = String((l && l.id) || '').trim();
+      if (!id || ja[id]) return;
+      ja[id] = true;
+      novas.push(CAB_BANCO.map(function (k) { return k === 'importado_em' ? agora : (l[k] === null || l[k] === undefined ? '' : String(l[k]).slice(0, 500)); }));
+    });
+    if (novas.length) s.getRange(s.getLastRow() + 1, 1, novas.length, CAB_BANCO.length).setNumberFormat('@').setValues(novas);
+    var r = resumo || {}, si = aba_('Banco Importacoes', CAB_BANCO_IMP);
+    var log = CAB_BANCO_IMP.map(function (k) { return k === 'importado_em' ? agora : k === 'novos' ? String(novas.length) : (r[k] === null || r[k] === undefined ? '' : String(r[k])); });
+    si.getRange(si.getLastRow() + 1, 1, 1, log.length).setNumberFormat('@').setValues([log]);
+    return { novos: novas.length, repetidos: linhas.length - novas.length };
+  } finally { lock.releaseLock(); }
+}
+function vincularBanco(token, ids, clienteId) {
+  dona_(token);
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var s = aba_('Banco', CAB_BANCO), t = tabela_(s), col = t.h.indexOf('cliente_id') + 1, quer = {}, n = 0;
+    (ids || []).forEach(function (i) { quer[String(i)] = true; });
+    t.rows.forEach(function (r, i) { if (quer[String(r[0])]) { s.getRange(i + 2, col).setNumberFormat('@').setValue(String(clienteId || '')); n++; } });
+    return n;
+  } finally { lock.releaseLock(); }
+}

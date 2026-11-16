@@ -820,3 +820,300 @@ saveCols(); pendingRender=true; draw(); toast('Coluna adicionada');
 };
 draw();
 }
+
+// ---------- Banco: extrato da conta corrente Sicredi, recebidos e inadimplência ----------
+let BANCO=null, bancoModo='painel', bancoPrevia=null;
+(()=>{if(document.getElementById('bancoCss'))return;const st=document.createElement('style');st.id='bancoCss';st.textContent=`
+.drawer.wide{width:min(1060px,100%)}
+.bkhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.bkhead .mesctl{height:40px}
+.bknote{font-size:12px;color:var(--muted)}
+.bkgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.bkk{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0}
+.bkk .k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.bkk .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkk .s{font-size:12px;color:var(--muted);margin-top:2px}
+.bkk.bad .v{color:var(--bad)} .bkk.good .v{color:var(--good)}
+.bkpos{font-size:13px;font-weight:700;letter-spacing:.02em}
+.bkhero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.bkhero .bkk{padding:20px 22px;border-width:2px}
+.bkhero .k{font-size:12px}
+.bkhero .v{font-size:clamp(28px,3.4vw,44px);margin-top:8px}
+.bkhero .s{font-size:13px}
+.bkenv h4{margin-bottom:4px}
+.bkmeter{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:8px}
+.bkmeter span{display:block;height:100%;background:var(--good)}
+.bkcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.bkbox{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0}
+.bkbox h4{margin:0 0 8px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.bkbox h4 span{font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.bkrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;font-variant-numeric:tabular-nums;align-items:center}
+.bkrow:last-child{border-bottom:0}
+.bkrow .n{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.bkrow .sub{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.bkrow .val{font-weight:700;text-align:right;white-space:nowrap}
+.bkrow.bad .val{color:var(--bad)} .bkrow.good .val{color:var(--good)}
+.bkrow.click{cursor:pointer} .bkrow.click:hover .n{color:var(--accent)}
+.bkvazio{font-size:12px;color:var(--muted);padding:4px 0}
+.bknid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,220px);gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.bknid:last-child{border-bottom:0}
+.bknid select{height:36px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;font-size:12px;padding:0 8px;min-width:0;width:100%}
+.bkimp textarea{width:100%;min-height:200px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;font-size:12px;padding:10px 12px;resize:vertical}
+.bkok{color:var(--good);font-weight:700} .bkerro{color:var(--bad);font-weight:700}
+details.bkbox summary{cursor:pointer;font-size:13px;font-weight:700}
+@media (max-width:820px){.bkgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.bkhero{grid-template-columns:minmax(0,1fr)}.bkcols{grid-template-columns:minmax(0,1fr)}.bknid{grid-template-columns:minmax(0,1fr)}}
+`;document.head.appendChild(st)})();
+
+const bkSoDig=v=>String(v==null?'':v).replace(/\D/g,'');
+const BK_STOP=['LTDA','ME','EPP','EIRELI','SA','S','A','SPE','DE','DA','DO','DAS','DOS','E'];
+const bkNormNome=v=>String(v==null?'':v).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(' ').filter(w=>w&&!BK_STOP.includes(w)).join(' ');
+const r2b=n=>Math.round(n*100)/100;
+const isoHoje=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+const diasEntre=(a,b)=>Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/864e5);
+function numBanco(v){let s=String(v==null?'':v).trim().replace(/\s/g,'').replace('R$','');if(!s)return null;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');const n=Number(s);return isFinite(n)?n:null}
+function dataBanco(v){const s=String(v||'').trim();let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);if(m)return `${m[1]}-${m[2]}-${m[3]}`;m=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);return m?`${m[3]}-${m[2]}-${m[1]}`:null}
+function lerCSV(txt){
+txt=String(txt||'').replace(/^﻿/,'');
+const prim=txt.split('\n')[0]||'', sep=(prim.split(';').length>prim.split(',').length)?';':(prim.split('\t').length>prim.split(',').length?'\t':',');
+const out=[];let campo='',linha=[],aspas=false;
+for(let i=0;i<txt.length;i++){const c=txt[i];
+if(aspas){if(c==='"'){if(txt[i+1]==='"'){campo+='"';i++}else aspas=false}else campo+=c}
+else if(c==='"')aspas=true;
+else if(c===sep){linha.push(campo);campo=''}
+else if(c==='\n'){linha.push(campo);out.push(linha);linha=[];campo=''}
+else if(c!=='\r')campo+=c}
+if(campo!==''||linha.length){linha.push(campo);out.push(linha)}
+return out.filter(l=>l.some(x=>String(x).trim()!==''));
+}
+function lancDoCSV(txt){
+const t=lerCSV(txt); if(t.length<2) throw new Error('Não encontrei linhas no extrato. Cole o CSV inteiro, com a linha de títulos.');
+const h=t[0].map(x=>bkNormNome(x).toLowerCase().replace(/ /g,'_'));
+const col=k=>h.indexOf(k);
+['data','descricao','valor'].forEach(k=>{if(col(k)<0) throw new Error(`Falta a coluna "${k}" na linha de títulos do extrato.`)});
+const g=(l,k)=>col(k)>=0?String(l[col(k)]==null?'':l[col(k)]).trim():'';
+const lista=[];
+t.slice(1).forEach((l,i)=>{
+const data=dataBanco(g(l,'data')), valor=numBanco(g(l,'valor'));
+if(!data||valor===null) return; // linhas sem data (saldo, rodapé) ficam de fora
+const saldo=numBanco(g(l,'saldo')), doc=bkSoDig(g(l,'contraparte_cpf_cnpj'));
+let tipo=g(l,'tipo').toLowerCase(); if(tipo!=='credito'&&tipo!=='debito') tipo=valor>0?'credito':'debito';
+const id=g(l,'id')||[data,g(l,'documento'),valor.toFixed(2),saldo===null?'':saldo.toFixed(2)].join('|');
+lista.push({id,data,descricao:g(l,'descricao'),documento:g(l,'documento'),tipo,valor:r2b(valor),saldo:saldo===null?null:r2b(saldo),contraparte_cpf_cnpj:doc,contraparte_nome:g(l,'contraparte_nome'),mes_ref:data.slice(0,7),cliente_id:'',_ord:i});
+});
+if(!lista.length) throw new Error('Nenhum lançamento com data e valor foi encontrado.');
+return lista;
+}
+function validarSaldo(lista){
+let quebra=null;
+for(let i=1;i<lista.length;i++){const a=lista[i-1],b=lista[i];if(a.saldo===null||b.saldo===null)continue;if(Math.abs(r2b(a.saldo+b.valor)-b.saldo)>0.01){quebra=i;break}}
+return quebra;
+}
+function aprendido(){
+const doc={},nome={};
+(BANCO?BANCO.lanc:[]).forEach(l=>{if(!l.cliente_id)return;const d=bkSoDig(l.contraparte_cpf_cnpj);if(d)doc[d]=l.cliente_id;const n=bkNormNome(l.contraparte_nome);if(n)nome[n]=l.cliente_id;else{const k=bkNormNome(l.descricao);if(k)nome[k]=l.cliente_id}});
+return {doc,nome};
+}
+function alvoDe(r){return ehConta(r)?(grupoDe(r)||{}).id:r.id}
+function mapaClientes(){
+const porDoc={},porNome=[];
+rows.forEach(r=>{const alvo=alvoDe(r);if(!alvo)return;const d=bkSoDig(r.doc);if(d.length>=11)porDoc[d]=alvo;
+[r.razao,r.nomeBanco,r.cliente].forEach(n=>{const k=bkNormNome(n);if(k.length>=5)porNome.push([k,alvo])})});
+return {porDoc,porNome};
+}
+function ligarCliente(l,m,apr){
+if(l.tipo!=='credito') return '';
+const d=bkSoDig(l.contraparte_cpf_cnpj);
+if(d&&apr.doc[d]) return apr.doc[d];
+if(d&&m.porDoc[d]) return m.porDoc[d];
+const nk=bkNormNome(l.contraparte_nome);
+if(nk&&apr.nome[nk]) return apr.nome[nk];
+if(!nk){const dk=bkNormNome(l.descricao);if(dk&&apr.nome[dk])return apr.nome[dk]}
+if(nk.length>=5){const ids=[...new Set(m.porNome.filter(([k])=>k===nk||k.includes(nk)||nk.includes(k)).map(x=>x[1]))];if(ids.length===1)return ids[0]}
+return '';
+}
+function catLanc(l){
+const d=bkNormNome(l.descricao);
+if(l.tipo==='credito'){if(d.includes('PIX'))return 'Pix recebidos';if(d.includes('COBRANCA')||d.includes('BOLETO')||d.includes('LIQUIDACAO')||d.includes('TITULO'))return 'Boletos pagos';if(d.includes('TED')||d.includes('TRANSF'))return 'TED e transferências';return 'Outras entradas'}
+if(d.includes('TARIFA')||d.includes('CESTA')||d.includes('IOF')||d.includes('JUROS')||d.includes('ENCARGO')||d.includes('MANUTENCAO'))return 'Tarifas e encargos';
+if(d.includes('PIX'))return 'Pix enviados';
+if(d.includes('CONVENIO')||d.includes('PAGAMENTO')||d.includes('BOLETO')||d.includes('DEBITO AUTOMATICO'))return 'Pagamentos e convênios';
+return 'Outras saídas';
+}
+const nomeCli=id=>{const r=rows.find(x=>x.id===id);return r?(r.cliente||'sem nome'):'cliente removido'};
+function bkCorte(){
+const imp=(BANCO?BANCO.imp:[]).map(i=>i.periodo_ate).filter(d=>d&&String(d).slice(0,7)===refMes).sort();
+const ds=(BANCO?BANCO.lanc:[]).filter(l=>l.mes_ref===refMes).map(l=>l.data).sort();
+const c=[imp[imp.length-1],ds[ds.length-1]].filter(Boolean).sort().pop();
+if(c) return {data:c,doExtrato:true};
+const h=isoHoje();return {data:refMes===h.slice(0,7)?h:(refMes<h.slice(0,7)?bkUltimoDia(refMes):refMes+'-01'),doExtrato:false};
+}
+function situacaoMes(){
+const hoje=bkCorte().data, lanc=(BANCO?BANCO.lanc:[]).filter(l=>l.tipo==='credito'&&l.mes_ref===refMes);
+const salva=refMes;let lista;refMes=shiftMes(salva,-1);try{lista=boletosDoMes()}finally{refMes=salva} // cobranças que vencem neste mês (referência do mês anterior)
+return lista.filter(b=>isNum(b.total)&&b.total>0).map(b=>{
+const pags=lanc.filter(l=>l.cliente_id===b.r.id), pago=r2b(pags.reduce((s,l)=>s+l.valor,0));
+const venc=b.partes.map(x=>x.venc).filter(Boolean).sort()[0]||null;
+const falta=b.pago?0:Math.max(0,r2b(b.total-pago));
+const st=b.pago?'fora':falta<=0.5?'pago':(venc&&venc<hoje)?'atraso':'aberto';
+return {b,venc,pags,pago,falta,st,dias:venc&&venc<hoje?diasEntre(venc,hoje):0};
+});
+}
+function openBanco(){
+if(ASSIST()) return;
+bancoModo='painel';
+if(!BANCO){shell('Banco','<div class="bkvazio">Carregando os dados do banco…</div>','<span></span>');$('#drawerRoot .drawer')?.classList.add('wide');carregarBanco()}
+else drawBanco();
+}
+function carregarBanco(){
+return GA('lerBanco').then(d=>{BANCO={lanc:(d&&d.lanc)||[],imp:(d&&d.imp)||[]};BANCO.lanc.forEach(l=>{if(l.cliente_id==null)l.cliente_id=''});drawBanco()}).catch(e=>{
+const m=String(e&&e.message||'');
+const falta=/not found|encontrad|lerBanco/i.test(m);
+shell('Banco',`<div class="bkbox"><h4>${falta?'O servidor ainda não tem o módulo Banco':'Não consegui carregar os dados do banco'}</h4><div class="bknote">${falta?'Falta atualizar o Code.gs no Apps Script (copiar o Code.gs novo do GitHub e criar uma nova versão da implantação). Depois recarregue a página.':esc(m||'Verifique a conexão e tente de novo.')}</div></div>`,'<span></span><button class="btn" type="button" id="bkFechar">Fechar</button>');
+$('#drawerRoot .drawer')?.classList.add('wide');$('#bkFechar').onclick=closeDrawer;
+});
+}
+function drawBanco(){
+if(bancoModo==='importar') return drawImportar();
+const corte=bkCorte(), sit=situacaoMes(), doMes=BANCO.lanc.filter(l=>l.mes_ref===refMes);
+const cred=doMes.filter(l=>l.tipo==='credito'), deb=doMes.filter(l=>l.tipo!=='credito');
+const previsto=r2b(sit.reduce((s,x)=>s+x.b.total,0)), recebido=r2b(sit.reduce((s,x)=>s+(x.st==='fora'?x.b.total:Math.min(x.pago,x.b.total)),0));
+const atraso=sit.filter(x=>x.st==='atraso'), aberto=sit.filter(x=>x.st==='aberto');
+const somaAtraso=r2b(atraso.reduce((s,x)=>s+x.falta,0)), somaAberto=r2b(aberto.reduce((s,x)=>s+x.falta,0));
+const pct=previsto>0?Math.min(100,Math.round(recebido/previsto*100)):0;
+const entradas=r2b(cred.reduce((s,l)=>s+l.valor,0)), saidas=r2b(deb.reduce((s,l)=>s+l.valor,0));
+const porCat=lista=>{const o={};lista.forEach(l=>{const c=catLanc(l);o[c]=r2b((o[c]||0)+l.valor)});return Object.entries(o).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))};
+const comSaldo=doMes.filter(l=>l.saldo!==null), saldoIni=comSaldo.length?r2b(comSaldo[0].saldo-comSaldo[0].valor):null, saldoFim=comSaldo.length?comSaldo[comSaldo.length-1].saldo:null;
+const ultimo=doMes.length?doMes.map(l=>l.data).sort().pop():null;
+const nid=cred.filter(l=>!l.cliente_id), ign=cred.filter(l=>l.cliente_id==='ignorar');
+const clientesRec={};cred.filter(l=>l.cliente_id&&l.cliente_id!=='ignorar').forEach(l=>{(clientesRec[l.cliente_id]=clientesRec[l.cliente_id]||[]).push(l)});
+const prevPor={};sit.forEach(x=>{prevPor[x.b.r.id]=x});
+const recLista=Object.entries(clientesRec).map(([id,ls])=>({id,ls,soma:r2b(ls.reduce((s,l)=>s+l.valor,0)),prev:prevPor[id]})).sort((a,b)=>coll.compare(nomeCli(a.id),nomeCli(b.id)));
+const fora=sit.filter(x=>x.st==='fora'), envOk=sit.filter(x=>x.b.disp), envFalta=sit.filter(x=>!x.b.disp&&x.st!=='pago'&&x.st!=='fora');
+const opcoes=rows.filter(r=>!ehConta(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>`<option value="${esc(r.id)}">${esc(r.cliente||'sem nome')}${r.arquivado?' (arquivado)':''}</option>`).join('');
+const linhaCat=([c,v])=>`<div class="bkrow"><span class="n">${esc(c)}</span><span class="val">${brl.format(Math.abs(v))}</span></div>`;
+const body=`<div class="bkhead"><div class="mesctl" role="group" aria-label="Mês"><button class="mini" id="bkPrev" type="button" aria-label="Mês anterior">‹</button><span>${esc(mesLabel(refMes))}</span><button class="mini" id="bkNext" type="button" aria-label="Próximo mês">›</button></div>
+<span class="bknote">${doMes.length?`Extrato importado até ${dataBR(ultimo)} · ${doMes.length} lançamentos`:'Nenhum extrato deste mês ainda. Clique em "Atualizar com o Sicredi".'}</span></div>
+<div class="bkpos">${corte.doExtrato?`Posição até ${dataBR(corte.data)}, data do último extrato`:`Sem extrato deste mês ainda. Posição calculada até ${dataBR(corte.data)}`}</div>
+<div class="bkhero">
+<div class="bkk"><div class="k">Previsto no mês</div><div class="v">${brl.format(previsto)}</div><div class="s">${sit.length} cobranças vencendo em ${esc(mesLabel(refMes).toLowerCase())}</div></div>
+<div class="bkk good"><div class="k">Recebido até ${dataBR(corte.data)}</div><div class="v">${brl.format(recebido)}</div><div class="bkmeter"><span style="width:${pct}%"></span></div><div class="s">${pct}% do previsto</div></div>
+<div class="bkk bad"><div class="k">Inadimplente até ${dataBR(corte.data)}</div><div class="v">${brl.format(somaAtraso)}</div><div class="s">${atraso.length} cliente${atraso.length===1?'':'s'} com vencimento já passado</div></div>
+<div class="bkk"><div class="k">Falta entrar no mês</div><div class="v">${brl.format(somaAberto)}</div><div class="s">${aberto.length} cliente${aberto.length===1?'':'s'} ainda no prazo</div></div>
+</div>
+<div class="bkbox bkenv"><h4>Envios das cobranças<span>${envOk.length} de ${sit.length} enviadas</span></h4>${envFalta.length?`<div class="bknote">Ainda não enviadas: ${envFalta.map(x=>esc(x.b.r.cliente||'sem nome')).join(', ')}</div>`:'<div class="bknote">Todas as cobranças que vencem neste mês foram enviadas.</div>'}</div>
+<div class="bkgrid">
+<div class="bkk"><div class="k">Saldo inicial</div><div class="v">${saldoIni===null?'–':brl.format(saldoIni)}</div></div>
+<div class="bkk good"><div class="k">Entradas na conta</div><div class="v">${brl.format(entradas)}</div><div class="s">${cred.length} lançamentos</div></div>
+<div class="bkk bad"><div class="k">Saídas da conta</div><div class="v">${brl.format(Math.abs(saidas))}</div><div class="s">${deb.length} lançamentos</div></div>
+<div class="bkk"><div class="k">Saldo final</div><div class="v">${saldoFim===null?'–':brl.format(saldoFim)}</div></div>
+</div>
+<div class="bkcols">
+<div class="bkbox"><h4>Entradas por tipo<span>${brl.format(entradas)}</span></h4>${porCat(cred).map(linhaCat).join('')||'<div class="bkvazio">Sem entradas no mês.</div>'}</div>
+<div class="bkbox"><h4>Saídas por tipo<span>${brl.format(Math.abs(saidas))}</span></h4>${porCat(deb).map(linhaCat).join('')||'<div class="bkvazio">Sem saídas no mês.</div>'}</div>
+</div>
+<div class="bkcols">
+<div class="bkbox"><h4>Inadimplentes<span>${brl.format(somaAtraso)}</span></h4>${atraso.sort((a,b)=>b.dias-a.dias).map(x=>`<div class="bkrow bad click" data-cli="${esc(x.b.r.id)}"><span class="n">${esc(x.b.r.cliente||'sem nome')}<span class="sub">venceu ${dataBR(x.venc)} · ${x.dias} dia${x.dias===1?'':'s'} de atraso${x.pago>0?` · pagou ${brl.format(x.pago)}`:''}</span></span><span class="val">${brl.format(x.falta)}</span></div>`).join('')||'<div class="bkvazio">Ninguém em atraso neste mês.</div>'}</div>
+<div class="bkbox"><h4>A vencer<span>${brl.format(somaAberto)}</span></h4>${aberto.sort((a,b)=>String(a.venc||'').localeCompare(String(b.venc||''))).map(x=>`<div class="bkrow click" data-cli="${esc(x.b.r.id)}"><span class="n">${esc(x.b.r.cliente||'sem nome')}<span class="sub">${x.venc?`vence ${dataBR(x.venc)}`:'sem vencimento'}${x.pago>0?` · pagou ${brl.format(x.pago)}`:''}</span></span><span class="val">${brl.format(x.falta)}</span></div>`).join('')||'<div class="bkvazio">Nada a vencer.</div>'}</div>
+</div>
+<div class="bkbox"><h4>Recebidos de clientes<span>${brl.format(recebido)}</span></h4>${recLista.map(x=>{const prev=x.prev?x.prev.b.total:null,dif=prev===null?null:r2b(x.soma-prev);return `<div class="bkrow good click" data-cli="${esc(x.id)}"><span class="n">${esc(nomeCli(x.id))}<span class="sub">${x.ls.map(l=>`${dataBR(l.data)} ${esc(catLanc(l).replace(' recebidos','').replace(' pagos',''))}`).join(' · ')}${prev===null?' · sem cobrança prevista no mês':` · previsto ${brl.format(prev)}${Math.abs(dif)>0.009?` · diferença ${dif>0?'+':'−'}${brl.format(Math.abs(dif))}`:''}`}</span></span><span class="val">${brl.format(x.soma)}</span></div>`}).join('')}${fora.map(x=>`<div class="bkrow good click" data-cli="${esc(x.b.r.id)}"><span class="n">${esc(x.b.r.cliente||'sem nome')}<span class="sub">marcado como pago por fora</span></span><span class="val">${brl.format(x.b.total)}</span></div>`).join('')||(recLista.length?'':'<div class="bkvazio">Nenhum recebimento ligado a cliente neste mês.</div>')}</div>
+<div class="bkbox"><h4>Não identificados<span>${nid.length} · ${brl.format(r2b(nid.reduce((s,l)=>s+l.valor,0)))}</span></h4>${nid.length?'<div class="bknote" style="margin-bottom:6px">Escolha de qual cliente é cada entrada. O sistema lembra a escolha nos próximos extratos.</div>':''}${nid.map(l=>`<div class="bknid"><span><strong>${esc(l.contraparte_nome||l.descricao||'Sem descrição')}</strong><span class="bknote" style="display:block">${dataBR(l.data)} · ${esc(l.descricao||'')}${l.contraparte_cpf_cnpj?` · ${esc(l.contraparte_cpf_cnpj)}`:''}</span></span><strong>${brl.format(l.valor)}</strong><select data-lig="${esc(l.id)}" aria-label="Cliente desta entrada"><option value="">Escolher cliente…</option><option value="ignorar">Não é de cliente</option>${opcoes}</select></div>`).join('')||'<div class="bkvazio">Todas as entradas do mês estão ligadas.</div>'}</div>
+${ign.length?`<details class="bkbox"><summary>Entradas que não são de clientes (${ign.length} · ${brl.format(r2b(ign.reduce((s,l)=>s+l.valor,0)))})</summary>${ign.map(l=>`<div class="bkrow"><span class="n">${esc(l.contraparte_nome||l.descricao)}<span class="sub">${dataBR(l.data)} · ${esc(l.descricao||'')}</span></span><span class="val"><button class="mini" type="button" data-deslig="${esc(l.id)}" title="Voltar para não identificados">↺</button> ${brl.format(l.valor)}</span></div>`).join('')}</details>`:''}
+<details class="bkbox"><summary>Todas as saídas do mês (${deb.length})</summary>${deb.map(l=>`<div class="bkrow"><span class="n">${esc(l.contraparte_nome||l.descricao)}<span class="sub">${dataBR(l.data)} · ${esc(catLanc(l))}${l.contraparte_nome?` · ${esc(l.descricao)}`:''}</span></span><span class="val">${brl.format(Math.abs(l.valor))}</span></div>`).join('')||'<div class="bkvazio">Sem saídas.</div>'}</details>
+<div class="bknote">Este painel mostra o mês do jeito do caixa: o que entrou e saiu da conta em ${esc(mesLabel(refMes).toLowerCase())} e as cobranças que vencem nele (as de referência ${esc(mesLabel(shiftMes(refMes,-1)).toLowerCase())}). Cobrança marcada como "Já pago por fora" em Boletos conta como recebida.</div>`;
+shell('Banco',body,'<span class="bknote">Dados da aba Banco da planilha</span><div style="display:flex;gap:8px"><button class="btn" type="button" id="bkFechar">Fechar</button><button class="btn primary" type="button" id="bkImp">Atualizar com o Sicredi</button></div>');
+$('#drawerRoot .drawer')?.classList.add('wide');
+$('#bkFechar').onclick=closeDrawer;
+$('#bkImp').onclick=()=>{bancoModo='importar';bancoPrevia=null;drawBanco()};
+$('#bkPrev').onclick=()=>{refMes=shiftMes(refMes,-1);render();drawBanco()};
+$('#bkNext').onclick=()=>{refMes=shiftMes(refMes,1);render();drawBanco()};
+document.querySelectorAll('#drawerRoot [data-cli]').forEach(el=>el.onclick=()=>{const id=el.dataset.cli;if(rows.some(r=>r.id===id))openClient(id)});
+document.querySelectorAll('#drawerRoot [data-lig]').forEach(sel=>sel.onchange=()=>vincular(sel.dataset.lig,sel.value,sel));
+document.querySelectorAll('#drawerRoot [data-deslig]').forEach(b=>b.onclick=()=>vincular(b.dataset.deslig,'',b));
+}
+function vincular(id,cid,el){
+if(cid===undefined) return;
+const l=BANCO.lanc.find(x=>x.id===id); if(!l) return;
+const antes=l.cliente_id; if(el) el.disabled=true;
+GA('vincularBanco',[id],cid).then(()=>{l.cliente_id=cid;drawBanco();toast(cid==='ignorar'?'Marcado como não sendo de cliente':cid?`Ligado a ${nomeCli(cid)}`:'Voltou para não identificados',{label:'Desfazer',fn:()=>GA('vincularBanco',[id],antes).then(()=>{l.cliente_id=antes;drawBanco()})})}).catch(e=>{if(el)el.disabled=false;toast('Não consegui salvar. Tente de novo.')});
+}
+function bkUltimoDia(m){const [y,mo]=m.split('-').map(Number);return `${m}-${String(new Date(y,mo,0).getDate()).padStart(2,'0')}`}
+function bkPeriodo(){const hoje=isoHoje(),de=refMes+'-01',ate=refMes===hoje.slice(0,7)?hoje:bkUltimoDia(refMes);return {de,ate:ate<de?de:ate}}
+function promptBanco(){
+const {de,ate}=bkPeriodo();
+return `Tarefa: ler o extrato da conta corrente Sicredi (conta 0109 91276-8, M. FERNANDES MATOS LTDA) e me devolver um CSV em texto para o sistema GHAID Cash.
+
+PERÍODO: de ${dataBR(de)} até ${dataBR(ate)}.
+
+COMO FAZER
+1. Use a aba do Internet Banking Sicredi (ibpj.sicredi.com.br), que já deve estar aberta e logada. Abra uma aba nova para o extrato e não mexa nas outras abas.
+2. Entre em Conta Corrente > Extratos > Extrato. Em "Período do Extrato", informe De ${dataBR(de)} e Até ${dataBR(ate)} e clique em Pesquisar.
+3. Leia a tabela do extrato pelo conteúdo da página (colunas Data, Descrição, Documento, Valor, Saldo), não por print de tela. Se a leitura vier cortada, leia em partes de 10 a 15 linhas até cobrir todas.
+4. Se o banco não estiver aberto e logado, PARE e me avise.
+
+SEGURANÇA
+- Somente leitura. Não clique em pagar, transferir, confirmar, gerar boleto, excluir nem alterar cadastro.
+- Se aparecer pedido de senha, token ou assinatura eletrônica, pare e me avise.
+- Feche a aba que você abriu quando terminar.
+
+COMO MONTAR O CSV
+- Uma linha por lançamento. Ignore a linha de saldo anterior (sem data) e o rodapé "Soma dos lançamentos selecionados".
+- data no formato AAAA-MM-DD.
+- valor e saldo com ponto decimal e sem separador de milhar (ex.: 1234.56). Débito com sinal de menos (ex.: -59.90).
+- tipo: credito se o valor for maior que zero, senão debito.
+- id: data|documento|valor|saldo (ex.: 2026-11-03|0012345|1180.00|4320.10).
+- Em "PAGAMENTO PIX", "RECEBIMENTO PIX" ou "DEBITO CONVENIOS" seguidos de um número de 11 ou 14 dígitos, coloque esse número em contraparte_cpf_cnpj e o resto do texto em contraparte_nome. Nos outros lançamentos, deixe essas duas colunas vazias.
+- Ponha entre aspas duplas qualquer campo que tenha vírgula.
+
+CONFERÊNCIA
+- Partindo do saldo anterior, some cada valor e confira se o resultado bate com o saldo de cada linha. Se alguma linha não bater, não entregue o CSV: me mostre onde quebrou.
+
+RESPOSTA
+Responda só com o CSV dentro de um bloco de código, começando por esta linha de títulos:
+id,data,descricao,documento,tipo,valor,saldo,contraparte_cpf_cnpj,contraparte_nome
+Depois do bloco, uma linha com: quantidade de lançamentos, saldo inicial, total de entradas, total de saídas e saldo final.`;
+}
+function bkLimpar(txt){
+const ls=String(txt||'').replace(/\r/g,'').split('\n').filter(l=>l.trim().indexOf('`')!==0);
+const i=ls.findIndex(l=>{const k=l.trim().toLowerCase();return k.indexOf('id,')===0||k.indexOf('id;')===0||(k.includes('data')&&k.includes('valor')&&k.includes('descri'))});
+return (i>=0?ls.slice(i):ls).join('\n');
+}
+function drawImportar(){
+const p=bancoPrevia||{}, {de,ate}=bkPeriodo();
+const body=`<div class="bkbox"><h4>1. Copie o prompt e cole no Claude in Chrome<span>${dataBR(de)} a ${dataBR(ate)}</span></h4>
+<div class="bknote" style="margin-bottom:8px">Abra o Internet Banking do Sicredi logado, cole este prompt no Claude in Chrome e espere a resposta. O período segue o mês escolhido no Banco.</div>
+<div class="bkimp"><textarea id="bkPrompt" readonly style="min-height:150px">${esc(promptBanco())}</textarea></div>
+<div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" type="button" id="bkCopiar">Copiar prompt</button></div></div>
+<div class="bkbox"><h4>2. Cole aqui a resposta do Claude in Chrome</h4>
+<div class="bknote" style="margin-bottom:8px">Pode colar a resposta inteira, com o bloco de código. O sistema pega só o CSV. Lançamentos que já estavam no sistema não se repetem.</div>
+<div class="bkimp"><textarea id="bkTxt" placeholder="Cole aqui a resposta">${esc(p.txt||'')}</textarea></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" type="button" id="bkAtualizar">Atualizar Banco</button><label class="btn" for="bkFile">Ou escolher arquivo CSV</label><input id="bkFile" type="file" accept=".csv,.txt" hidden></div>
+${p.erro?`<div style="margin-top:10px" class="bkerro">${esc(p.erro)}</div>`:''}</div>`;
+shell('Banco · Atualizar com o Sicredi',body,'<button class="btn" type="button" id="bkVoltar">Voltar</button><span class="bknote">Os dados vão para a aba Banco da planilha</span>');
+$('#drawerRoot .drawer')?.classList.add('wide');
+$('#bkVoltar').onclick=()=>{bancoModo='painel';bancoPrevia=null;drawBanco()};
+$('#bkCopiar').onclick=()=>{const t=$('#bkPrompt');const fb=()=>{t.focus();t.select();toast('Prompt selecionado. Use Ctrl+C para copiar.')};try{navigator.clipboard.writeText(t.value).then(()=>toast('Prompt copiado. Cole no Claude in Chrome.'),fb)}catch(e){fb()}};
+$('#bkFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{$('#bkTxt').value=String(rd.result||'');atualizarBanco()};rd.readAsText(f,'UTF-8')};
+$('#bkAtualizar').onclick=atualizarBanco;
+}
+function atualizarBanco(){
+const txt=$('#bkTxt').value, btn=$('#bkAtualizar');
+let lista,novos,quebra;
+try{
+lista=lancDoCSV(bkLimpar(txt));
+quebra=validarSaldo(lista);
+if(quebra!==null) throw new Error(`O saldo não bate na linha ${quebra+1} (${dataBR(lista[quebra].data)}). Peça para o Claude in Chrome ler o extrato de novo.`);
+const ja=new Set(BANCO.lanc.map(l=>l.id)), m=mapaClientes(), apr=aprendido();
+lista.forEach(l=>{l.cliente_id=ligarCliente(l,m,apr)});
+novos=lista.filter(l=>!ja.has(l.id));
+}catch(e){bancoPrevia={txt,erro:e.message||'Não consegui ler a resposta.'};return drawBanco()}
+if(!novos.length){bancoPrevia={txt};toast('Nada novo: este extrato já estava no Banco.');return}
+const datas=lista.map(l=>l.data).sort(), comSaldo=lista.filter(l=>l.saldo!==null);
+const resumo={periodo_de:datas[0],periodo_ate:datas[datas.length-1],qtd_lancamentos:lista.length,saldo_inicial:comSaldo.length?r2b(comSaldo[0].saldo-comSaldo[0].valor):'',total_entradas:r2b(lista.filter(l=>l.tipo==='credito').reduce((s,l)=>s+l.valor,0)),total_saidas:r2b(lista.filter(l=>l.tipo!=='credito').reduce((s,l)=>s+l.valor,0)),saldo_final:comSaldo.length?comSaldo[comSaldo.length-1].saldo:'',validacao_saldo:'ok'};
+const lig=novos.filter(l=>l.tipo==='credito'&&l.cliente_id).length, sem=novos.filter(l=>l.tipo==='credito'&&!l.cliente_id).length;
+btn.disabled=true;btn.textContent='Atualizando…';
+GA('importarBanco',novos.map(({_ord,...l})=>l),resumo).then(res=>{
+bancoModo='painel';bancoPrevia=null;
+toast(`Banco atualizado: ${res.novos} lançamento${res.novos===1?'':'s'} novo${res.novos===1?'':'s'}, ${lig} ligado${lig===1?'':'s'} a cliente${sem?`, ${sem} para identificar`:''}.`,null,6000);
+return carregarBanco();
+}).catch(e=>{btn.disabled=false;btn.textContent='Atualizar Banco';bancoPrevia={txt,erro:/not found|encontrad/i.test(String(e&&e.message))?'Falta atualizar o Code.gs no Apps Script.':'Não consegui gravar. Tente de novo.'};drawBanco()});
+}
