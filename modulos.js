@@ -217,24 +217,30 @@ else L.push(`Vencimento: ${dataBR(b.partes[0].venc)}`);
 L.push('',emailFim(),'',b.partes.length>1?'Os boletos poderão ser enviados a protesto 5 dias úteis após o vencimento.':'Este boleto poderá ser enviado a protesto 5 dias úteis após o vencimento.');
 return L.join('\n');
 }
+// Canal de envio: e-mail e/ou WhatsApp. "Isento" e texto que não é e-mail não contam; vários e-mails separados por vírgula vão todos.
+const listaEmails=v=>valido(v)?String(v).split(/[,;\s]+/).map(x=>x.trim().toLowerCase()).filter(x=>x&&!ehIsento(x)&&EMAIL_RE.test(x)):[];
+const emailsDe=b=>{const a=listaEmails(b.r.email);return a.length?a:listaEmails(b.pag.email)};
+const canalDe=b=>{const e=emailsDe(b).length>0,w=!!whatsDe(b)&&!!whatsDigitos(whatsDe(b));return e&&w?'ambos':e?'email':w?'whats':''};
+const CANAL_TXT={ambos:'e-mail e WhatsApp',email:'e-mail',whats:'WhatsApp',nenhum:'não enviado'};
+const canalRegistrado=r=>(lerJSON(r.envioCanais)||{})[refMes]||'';
 function textoEmails(lista){
-const prontos=lista.filter(vaiNoTexto), com=prontos.filter(b=>emailDe(b)||whatsDe(b)), sem=prontos.filter(b=>!emailDe(b)&&!whatsDe(b)), cfg=envioCfg();
+const prontos=lista.filter(vaiNoTexto), com=prontos.filter(b=>canalDe(b)), sem=prontos.filter(b=>!canalDe(b)), cfg=envioCfg();
 const L=[`Enviar os boletos por e-mail e WhatsApp · ${mesLabel(refMes)}`,'',
 cfg.email?`E-mail: envie pelo Gmail da conta ${cfg.email} (financeiro). Antes de começar, confira no Gmail aberto qual conta está conectada: se não for ${cfg.email}, troque para ela ou pare e me avise.`
 :'ATENÇÃO: o e-mail de envio do financeiro não foi definido no GHAID Cash. Antes de enviar e-mails, me pergunte por qual conta enviar.',
 cfg.whats?`WhatsApp: envie pelo WhatsApp Web conectado no número ${cfg.whats} (financeiro). Antes de começar, confira em web.whatsapp.com qual número está conectado: se não for ${cfg.whats}, pare e me avise.`
 :'ATENÇÃO: o WhatsApp de envio do financeiro não foi definido no GHAID Cash. Antes de enviar por WhatsApp, me pergunte por qual número enviar.',
 'Não envie por outra conta nem por outro número.',
-'Para cada cliente abaixo, envie pelo(s) canal(is) indicado(s) na linha "Enviar por". E-mail: crie um e-mail novo com o destinatário, o assunto e a mensagem, com os anexos. WhatsApp: abra a conversa pelo link, anexe os PDFs como documento e envie a mensagem. Quando o cliente tiver os dois, envie pelos dois.',
+'Para cada cliente abaixo, envie só pelo(s) canal(is) da linha "Enviar por": e-mail e WhatsApp, envie pelos dois; só e-mail, envie só por e-mail; só WhatsApp, envie só pelo WhatsApp. E-mail: crie um e-mail novo com o assunto, a mensagem e os anexos; quando houver mais de um endereço em "E-mail para", coloque todos no Para do mesmo e-mail. WhatsApp: abra a conversa pelo link, anexe os PDFs como documento e envie a mensagem. Não envie por canal que não esteja na linha.',
 'Os anexos estão na pasta '+PASTA_BOLETOS()+'. Os PDFs foram baixados pelo Sicredi com o nome "Boleto-" + nome do pagador no banco, que pode estar abreviado. Se o nome indicado não existir, use o arquivo desse pagador (veja a lista cliente → arquivo do texto 1). Quando houver nota fiscal, ela vai junto com o boleto do mesmo cliente.',
 autoEnvio()?'Envie todos em sequência, sem me pedir confirmação a cada envio. Pule só quem tiver PDF não encontrado, dúvida sobre o arquivo certo ou número sem WhatsApp. No final, me mostre o resumo por cliente: enviado por e-mail, enviado por WhatsApp, pulado e o motivo.'
 :'Antes de cada envio, me mostre e espere a minha confirmação. Se algum PDF não for encontrado ou o número não tiver WhatsApp, me avise e pule. No final, me mostre o resumo por cliente.',''];
-com.forEach((b,n)=>{const e=emailDe(b),w=whatsDe(b);
-L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Enviar por: ${e&&w?'e-mail e WhatsApp':e?'e-mail':'WhatsApp'}`);
-if(e)L.push(`E-mail para: ${e}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`);
+com.forEach((b,n)=>{const c=canalDe(b),e=c!=='whats'?emailsDe(b):[],w=c!=='email'?whatsDe(b):null;
+L.push(`--- ${n+1}. ${b.r.cliente} ---`,`Enviar por: ${CANAL_TXT[c]}`);
+if(e.length)L.push(`E-mail para: ${e.join(', ')}${e.length>1?` (${e.length} endereços, todos no mesmo e-mail)`:''}`,`Assunto: Boleto GHAID · ${mesLabel(refMes)} · ${b.r.cliente}`);
 if(w)L.push(`WhatsApp: ${w} · abrir: https://web.whatsapp.com/send?phone=${whatsDigitos(w)}`);
 L.push(`Anexar: ${anexosDe(b)}`,'Mensagem:',corpoEmail(b),'')});
-if(sem.length){L.push('Sem e-mail e sem WhatsApp cadastrados (não enviar, cadastre no GHAID Cash):');sem.forEach(b=>L.push(`- ${b.r.cliente}`))}
+if(sem.length){L.push('NÃO ENVIAR (sem e-mail válido e sem WhatsApp no GHAID Cash):');sem.forEach(b=>L.push(`- ${b.r.cliente}`))}
 return L.join('\n');
 }
 function textoBoletos(lista){
@@ -513,7 +519,8 @@ const pagador=g?`<select data-pagador aria-label="Pagador do grupo ${esc(r.clien
 return `<div class="bol${!b.gerar?' off':b.faltas.length?' falta':''}" data-id="${esc(r.id)}">
 <div class="bolhead"><strong>${esc(r.cliente||'sem nome')}${g?' · grupo':''}${b.esp?' · esporádico':''}</strong><span class="v">${isNum(b.total)?brl.format(b.total):'sem valor'}</span></div>
 <div class="bolsub">${pagador}${esc(valido(b.pag.razao)?b.pag.razao:'sem razão social')} · ${esc(valido(b.pag.doc)?b.pag.doc:'sem CNPJ/CPF')}</div>
-<div class="bolsub${emailDe(b)||whatsDe(b)?'':' bolsememail'}">${emailDe(b)?esc(emailDe(b)):'<span class="bolsememail">sem e-mail</span>'} · ${whatsDe(b)?`WhatsApp ${esc(whatsDe(b))}`:'<span class="bolsememail">sem WhatsApp</span>'}</div>
+<div class="bolsub">${emailsDe(b).length?esc(emailsDe(b).join(', ')):`<span class="bolsememail">${ehIsento(b.r.email)?'e-mail: Isento (não é e-mail)':'sem e-mail'}</span>`} · ${whatsDe(b)?`WhatsApp ${esc(whatsDe(b))}`:'<span class="bolsememail">sem WhatsApp</span>'}</div>
+${canalDe(b)?`<div class="bolok">Sai por: ${CANAL_TXT[canalDe(b)]}${emailsDe(b).length>1&&canalDe(b)!=='whats'?` (${emailsDe(b).length} e-mails)`:''}</div>`:`<div class="bolconf"><span>Sem e-mail e sem WhatsApp: esta cobrança não vai ser enviada. Preencha o contato na ficha.</span><button class="mini" type="button" data-contato title="Abrir a ficha para preencher o contato">Preencher contato</button></div>`}
 ${b.partes.map((x,i)=>`<div class="bolparte"><span>${b.partes.length>1?`Boleto ${i+1} de ${b.partes.length}${x.rotulo?` · ${esc(x.rotulo)}`:''}`:`Boleto único${x.rotulo?` · ${esc(x.rotulo)}`:''}`} · venc. ${x.venc?dataBR(x.venc):'sem data'}${!b.div&&x.venc?' <span class="bolorig">(Dia de vencimento)</span>':''}</span><span>${isNum(x.valor)?brl.format(x.valor):''}</span></div>`).join('')}
 ${(it=>it.length?`<div class="bolitens"><span class="bolitt">${ehEsporadico(r)?'Serviços do mês':'Adicionais do mês'}</span>${it.map(i=>{const st=sitDe(i);return `<div><span>${esc(i.desc||'Item')}</span><span>${st?SIT_TEXTO[st]:isNum(i.valor)?brl.format(i.valor):'sem preço'}</span></div>`}).join('')}</div>`:'')(itemsOf(r))}
 ${conferirBoleto(b).map(c=>`<div class="bolconf"><span>${esc(c.txt)}</span><button class="mini" type="button" data-conf="${c.acao}" title="Marcar como conferido" aria-label="Marcar como conferido">Conferido</button></div>`).join('')}
@@ -530,10 +537,13 @@ shell('Boletos do mês',`
 ${(n=>n?`<div class="bolaguarda">${n} cobrança(s) com algo para conferir (aviso tracejado no cartão). Confira e clique em Conferido.</div>`:'')(lista.filter(b=>b.gerar&&!b.disp&&conferirBoleto(b).length).length)}
 <div class="sec">Cobranças</div>
 <div class="imp">${lista.filter(b=>b.gerar&&!b.disp&&!b.pago).map(card).join('')||`<div class="sub">Nenhum cliente para disparar em ${esc(mesLabel(refMes).toLowerCase())}. Marque OK na coluna Status cobrança de quem está liberado.</div>`}</div>
-${prontos.length?`<div class="bollote"><button class="btn" type="button" id="bolDisparado">Marcar estes ${prontos.length} como disparados</button><span>Use depois de gerar e enviar. Eles saem da lista deste mês e não entram de novo no próximo disparo.</span></div>`:''}
-${(n=>n.length?`<div class="bolaguarda">Já disparados em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}): ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}<button type="button" data-voltar="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.disp))}
+${(n=>n?`<div class="bollote"><button class="btn" type="button" id="bolDisparado">Marcar estes ${n} como disparados</button><span>Use depois de gerar e enviar. Eles saem da lista deste mês, ficam registrados com o canal (e-mail, WhatsApp ou os dois) e não entram de novo no próximo disparo.${n<prontos.length?' Quem está sem contato fica na lista.':''}</span></div>`:'')(prontos.filter(b=>canalDe(b)).length)}
+${(n=>n.length?`<div class="bolaguarda">Já disparados em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}): ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)} · <select data-canal="${esc(b.r.id)}" aria-label="Canal de envio de ${esc(b.r.cliente)}" style="border:0;background:transparent;color:inherit;font:inherit;padding:0">${['ambos','email','whats','nenhum'].map(k=>`<option value="${k}"${(canalRegistrado(b.r)||'')===k?' selected':''}>${CANAL_TXT[k]}</option>`).join('')}${canalRegistrado(b.r)?'':'<option value="" selected>canal não registrado</option>'}</select><button type="button" data-voltar="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.disp))}
 ${(n=>n.length?`<div class="bolaguarda">Pagos por fora em ${esc(mesLabel(refMes).toLowerCase())} (${n.length}), sem boleto: ${n.map(b=>`<span class="bolchip">${esc(b.r.cliente)}${b.pf?` · ${esc(b.pf)}`:''}<button type="button" data-despago="${esc(b.r.id)}" title="Voltar para a lista" aria-label="Voltar ${esc(b.r.cliente)} para a lista">×</button></span>`).join(' ')}</div>`:'')(lista.filter(b=>b.pago&&!b.disp))}
 ${nAguarda?`<div class="bolaguarda">${nAguarda} cliente(s) sem OK em ${esc(mesLabel(refMes).toLowerCase())} não aparecem aqui: ${esc(lista.filter(b=>!b.gerar).map(b=>b.r.cliente).join(', '))}.</div>`:''}
+${prontos.length?`<div class="sec">Conferência do envio (${prontos.length})</div>
+${(s=>s.length?`<div class="bolconf"><span>Sem contato, não vão ser enviados (${s.length}): ${esc(s.map(b=>b.r.cliente).join(', '))}. Preencha o e-mail ou o WhatsApp na ficha de cada um.</span></div>`:'')(prontos.filter(b=>!canalDe(b)))}
+<div class="bolitens" style="border-top:0;padding-top:0">${prontos.map(b=>`<div><span>${esc(b.r.cliente)}</span><span class="${canalDe(b)?'bolok':'bolsememail'}">${canalDe(b)?CANAL_TXT[canalDe(b)]:'sem contato'}</span></div>`).join('')}</div>`:''}
 <div class="sec">Envio pelo financeiro</div>
 <label class="boldiv bolok"><input type="checkbox" id="bAuto"${autoEnvio()?' checked':''}> Claude segue sozinho, sem pedir confirmação a cada boleto e mensagem</label>
 <p class="sub" style="margin:0;font-size:12px">Ele só para se algo não bater (pagador sem cadastro, dados diferentes, PDF não encontrado) e mostra um resumo no final. Deixe desmarcado se quiser conferir um por um.</p>
@@ -554,20 +564,26 @@ const marcarDisparo=async(lista2,dentro,msg)=>{
 if(!canWrite){toast('Você só tem acesso de leitura.');return}
 const antes=lista2.map(r=>({id:r.id,antes:copia(r)}));
 const totais=new Map(boletosDoMes().map(b=>[b.r.id,b.total]));
+const canais=new Map(boletosDoMes().map(b=>[b.r.id,canalDe(b)]));
 const novos=new Map(lista2.map(r=>{const st=new Set(lerJSON(r.disparoMeses)||[]);dentro?st.add(refMes):st.delete(refMes);const a=[...st].sort(),o={disparoMeses:a.length?JSON.stringify(a):null};
+const ec={...(lerJSON(r.envioCanais)||{})};if(dentro&&canais.get(r.id))ec[refMes]=canais.get(r.id);else if(!dentro)delete ec[refMes];o.envioCanais=Object.keys(ec).length?JSON.stringify(ec):null;
 if(dentro&&isNum(totais.get(r.id)))o.valorBoleto=totais.get(r.id);return [r.id,o]}));
 lista2.forEach(r=>Object.assign(r,novos.get(r.id))); draw();
 try{await writeMany(lista2.map(r=>[r.id,novos.get(r.id)]));lista2.forEach(r=>{const a=rows.find(x=>x.id===r.id);if(a)Object.assign(a,novos.get(r.id))});draw();oferecerDesfazer(msg,antes)}
 catch(e){handleWriteErr(e)}
 };
 if($('#bolDisparado')) $('#bolDisparado').onclick=()=>{const b=$('#bolDisparado');
-if(b.dataset.armed!=='1'){b.dataset.armed='1';b.classList.add('armed');b.textContent=`Confirmar: ${prontos.length} disparados?`;setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.classList.remove('armed');b.textContent=`Marcar estes ${prontos.length} como disparados`}},4000);return}
-marcarDisparo(prontos.map(x=>x.r),true,`${prontos.length} cliente(s) marcados como disparados em ${mesLabel(refMes).toLowerCase()}`)};
+const nV=prontos.filter(x=>canalDe(x)).length;
+if(b.dataset.armed!=='1'){b.dataset.armed='1';b.classList.add('armed');b.textContent=`Confirmar: ${nV} disparados?`;setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.classList.remove('armed');b.textContent=`Marcar estes ${nV} como disparados`}},4000);return}
+const vao=prontos.filter(x=>canalDe(x));marcarDisparo(vao.map(x=>x.r),true,`${vao.length} cliente(s) marcados como disparados em ${mesLabel(refMes).toLowerCase()}`)};
 const pagoFora=async(id,forma)=>{const r=rows.find(y=>y.id===id);if(!r)return;const o={...(lerJSON(r.pagoForaMeses)||{})};if(forma===null)delete o[refMes];else o[refMes]=forma;const v=Object.keys(o).length?JSON.stringify(o):null;
 await setCampo(id,'pagoForaMeses',v,forma===null?`${r.cliente} voltou para a lista de disparo`:`${r.cliente}: pago por fora em ${mesLabel(refMes).toLowerCase()}, sem boleto`);const a=rows.find(y=>y.id===id);if(a)a.pagoForaMeses=v;draw()};
 document.querySelectorAll('[data-pagofora]').forEach(x=>x.onclick=()=>{const id=x.closest('.bol').dataset.id,r=rows.find(y=>y.id===id);if(!r)return;
 const m=janela(`Pago por fora · ${r.cliente||''}`,`<p class="sub" style="margin:0;font-size:13px">${esc(mesLabel(refMes))}: este cliente sai do disparo de boletos e dos textos 1 e 2.</p><div class="field"><label for="pfForma">Como pagou</label><select id="pfForma"><option>Pix</option><option>Transferência</option><option>Dinheiro</option><option>Cartão</option><option>Outro</option></select></div><div class="field"><label for="pfObs">Observação (opcional)</label><input id="pfObs" placeholder="Ex.: pagou dia 05/11"></div>`,`<button class="btn primary" type="button" id="pfOk">Confirmar</button>`);
 $('#pfOk').onclick=()=>{const t=[$('#pfForma').value,$('#pfObs').value.trim()].filter(Boolean).join(' · ');fecharDivisao();pagoFora(id,t)}});
+document.querySelectorAll('[data-canal]').forEach(x=>x.onchange=async()=>{const r=rows.find(y=>y.id===x.dataset.canal);if(!r||!x.value)return;
+const ec={...(lerJSON(r.envioCanais)||{}),[refMes]:x.value},v=JSON.stringify(ec);
+await setCampo(r.id,'envioCanais',v,`${r.cliente}: ${mesLabel(refMes).toLowerCase()} registrado como ${CANAL_TXT[x.value]}`);const a=rows.find(y=>y.id===r.id);if(a)a.envioCanais=v;draw()});
 document.querySelectorAll('[data-despago]').forEach(x=>x.onclick=()=>pagoFora(x.dataset.despago,null));
 document.querySelectorAll('[data-voltar]').forEach(x=>x.onclick=()=>{const r=rows.find(y=>y.id===x.dataset.voltar);if(r)marcarDisparo([r],false,`${r.cliente} voltou para a lista de disparo`)});
 const copiar=(sel,msg)=>{const t=$(sel).value;const fb=()=>{const el=$(sel);el.focus();el.select();toast('Texto selecionado. Use Ctrl+C (ou Cmd+C) para copiar.')};
@@ -592,6 +608,7 @@ cfgFlags={...cfgFlags,docProx:{...(cfgFlags.docProx||{}),[refMes]:v}};saveCols()
 const salvarDiv=async(id,valor)=>{await setCampo(id,'boleto2',valor,valor?'Divisão em 2 boletos salva':'Volta a ser boleto único');const a=rows.find(x=>x.id===id);if(a)a.boleto2=valor;draw()};
 document.querySelectorAll('.bol').forEach(el=>{
 const id=el.dataset.id;
+el.querySelector('[data-contato]')?.addEventListener('click',()=>{const b=boletosDoMes().find(x=>x.r.id===id);openClient(b&&b.pag&&b.pag.id&&b.pag.id!==id&&!valido(b.r.email)?b.pag.id:id)});
 el.querySelector('[data-dividir]').onclick=()=>abrirDivisao(id,v=>salvarDiv(id,v));
 el.querySelectorAll('[data-nota]').forEach(btn=>btn.onclick=()=>escolherNota(id,draw));
 el.querySelector('[data-semnota]')?.addEventListener('click',async()=>{const r=rows.find(x=>x.id===id);if(!r)return;
