@@ -824,7 +824,13 @@ draw();
 // ---------- Banco: extrato da conta corrente Sicredi, recebidos e inadimplência ----------
 let BANCO=null, bancoModo='painel', bancoPrevia=null;
 (()=>{if(document.getElementById('bancoCss'))return;const st=document.createElement('style');st.id='bancoCss';st.textContent=`
-.drawer.wide{width:min(1060px,100%)}
+.drawer.wide{width:100%;left:0;border-left:0}
+.drawer.wide .dhead,.drawer.wide .dbody,.drawer.wide .dfoot{padding-left:max(20px,5vw);padding-right:max(20px,5vw)}
+.drawer.wide .dbody{gap:16px}
+.bkbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border:2px solid var(--accent);border-radius:var(--r);padding:14px 18px}
+.bkbar strong{display:block;font-size:14px}
+.bkbarbtns{display:flex;gap:8px;flex-wrap:wrap}
+.bkcolar{border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;display:flex;flex-direction:column;gap:8px}
 .bkhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .bkhead .mesctl{height:40px}
 .bknote{font-size:12px;color:var(--muted)}
@@ -948,7 +954,7 @@ if(c) return {data:c,doExtrato:true};
 const h=isoHoje();return {data:refMes===h.slice(0,7)?h:(refMes<h.slice(0,7)?bkUltimoDia(refMes):refMes+'-01'),doExtrato:false};
 }
 function situacaoMes(){
-const hoje=bkCorte().data, lanc=(BANCO?BANCO.lanc:[]).filter(l=>l.tipo==='credito'&&l.mes_ref===refMes);
+const ct=bkCorte(), hoje=ct.doExtrato?ct.data:'0000-00-00', lanc=(BANCO?BANCO.lanc:[]).filter(l=>l.tipo==='credito'&&l.mes_ref===refMes);
 const salva=refMes;let lista;refMes=shiftMes(salva,-1);try{lista=boletosDoMes()}finally{refMes=salva} // cobranças que vencem neste mês (referência do mês anterior)
 return lista.filter(b=>isNum(b.total)&&b.total>0).map(b=>{
 const pags=lanc.filter(l=>l.cliente_id===b.r.id), pago=r2b(pags.reduce((s,l)=>s+l.valor,0));
@@ -991,13 +997,16 @@ const recLista=Object.entries(clientesRec).map(([id,ls])=>({id,ls,soma:r2b(ls.re
 const fora=sit.filter(x=>x.st==='fora'), envOk=sit.filter(x=>x.b.disp), envFalta=sit.filter(x=>!x.b.disp&&x.st!=='pago'&&x.st!=='fora');
 const opcoes=rows.filter(r=>!ehConta(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>`<option value="${esc(r.id)}">${esc(r.cliente||'sem nome')}${r.arquivado?' (arquivado)':''}</option>`).join('');
 const linhaCat=([c,v])=>`<div class="bkrow"><span class="n">${esc(c)}</span><span class="val">${brl.format(Math.abs(v))}</span></div>`;
-const body=`<div class="bkhead"><div class="mesctl" role="group" aria-label="Mês"><button class="mini" id="bkPrev" type="button" aria-label="Mês anterior">‹</button><span>${esc(mesLabel(refMes))}</span><button class="mini" id="bkNext" type="button" aria-label="Próximo mês">›</button></div>
+const pv=bancoPrevia||{};
+const body=`<div class="bkbar"><div><strong>Atualizar com o Sicredi</strong><span class="bknote">1. Copie o prompt e cole no Claude in Chrome com o Sicredi aberto e logado. 2. Cole aqui a resposta dele e clique em Atualizar.</span></div><div class="bkbarbtns"><button class="btn primary" type="button" id="bkCopiarTopo">1. Copiar prompt</button><button class="btn" type="button" id="bkColarTopo">2. Colar resposta</button></div></div>
+<div class="bkcolar" id="bkColarBox"${pv.txt||pv.erro?'':' hidden'}><span class="bknote">Cole a resposta inteira do Claude in Chrome, do jeito que veio. O período do prompt é de ${dataBR(bkPeriodo().de)} a ${dataBR(bkPeriodo().ate)} (segue o mês escolhido abaixo).</span><div class="bkimp"><textarea id="bkTxt" placeholder="Cole aqui a resposta do Claude in Chrome">${esc(pv.txt||'')}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="button" id="bkAtualizar">Atualizar Banco</button><label class="btn" for="bkFile">Ou escolher arquivo CSV</label><input id="bkFile" type="file" accept=".csv,.txt" hidden></div>${pv.erro?`<span class="bkerro">${esc(pv.erro)}</span>`:''}</div>
+<div class="bkhead"><div class="mesctl" role="group" aria-label="Mês"><button class="mini" id="bkPrev" type="button" aria-label="Mês anterior">‹</button><span>${esc(mesLabel(refMes))}</span><button class="mini" id="bkNext" type="button" aria-label="Próximo mês">›</button></div>
 <span class="bknote">${doMes.length?`Extrato importado até ${dataBR(ultimo)} · ${doMes.length} lançamentos`:'Nenhum extrato deste mês ainda. Clique em "Atualizar com o Sicredi".'}</span></div>
 <div class="bkpos">${corte.doExtrato?`Posição até ${dataBR(corte.data)}, data do último extrato`:`Sem extrato deste mês ainda. Posição calculada até ${dataBR(corte.data)}`}</div>
 <div class="bkhero">
 <div class="bkk"><div class="k">Previsto no mês</div><div class="v">${brl.format(previsto)}</div><div class="s">${sit.length} cobranças vencendo em ${esc(mesLabel(refMes).toLowerCase())}</div></div>
 <div class="bkk good"><div class="k">Recebido até ${dataBR(corte.data)}</div><div class="v">${brl.format(recebido)}</div><div class="bkmeter"><span style="width:${pct}%"></span></div><div class="s">${pct}% do previsto</div></div>
-<div class="bkk bad"><div class="k">Inadimplente até ${dataBR(corte.data)}</div><div class="v">${brl.format(somaAtraso)}</div><div class="s">${atraso.length} cliente${atraso.length===1?'':'s'} com vencimento já passado</div></div>
+<div class="bkk bad"><div class="k">Inadimplente até ${dataBR(corte.data)}</div><div class="v">${corte.doExtrato?brl.format(somaAtraso):'–'}</div><div class="s">${corte.doExtrato?`${atraso.length} cliente${atraso.length===1?'':'s'} com vencimento já passado`:'Aparece depois do primeiro extrato do mês'}</div></div>
 <div class="bkk"><div class="k">Falta entrar no mês</div><div class="v">${brl.format(somaAberto)}</div><div class="s">${aberto.length} cliente${aberto.length===1?'':'s'} ainda no prazo</div></div>
 </div>
 <div class="bkbox bkenv"><h4>Envios das cobranças<span>${envOk.length} de ${sit.length} enviadas</span></h4>${envFalta.length?`<div class="bknote">Ainda não enviadas: ${envFalta.map(x=>esc(x.b.r.cliente||'sem nome')).join(', ')}</div>`:'<div class="bknote">Todas as cobranças que vencem neste mês foram enviadas.</div>'}</div>
@@ -1020,10 +1029,13 @@ const body=`<div class="bkhead"><div class="mesctl" role="group" aria-label="Mê
 ${ign.length?`<details class="bkbox"><summary>Entradas que não são de clientes (${ign.length} · ${brl.format(r2b(ign.reduce((s,l)=>s+l.valor,0)))})</summary>${ign.map(l=>`<div class="bkrow"><span class="n">${esc(l.contraparte_nome||l.descricao)}<span class="sub">${dataBR(l.data)} · ${esc(l.descricao||'')}</span></span><span class="val"><button class="mini" type="button" data-deslig="${esc(l.id)}" title="Voltar para não identificados">↺</button> ${brl.format(l.valor)}</span></div>`).join('')}</details>`:''}
 <details class="bkbox"><summary>Todas as saídas do mês (${deb.length})</summary>${deb.map(l=>`<div class="bkrow"><span class="n">${esc(l.contraparte_nome||l.descricao)}<span class="sub">${dataBR(l.data)} · ${esc(catLanc(l))}${l.contraparte_nome?` · ${esc(l.descricao)}`:''}</span></span><span class="val">${brl.format(Math.abs(l.valor))}</span></div>`).join('')||'<div class="bkvazio">Sem saídas.</div>'}</details>
 <div class="bknote">Este painel mostra o mês do jeito do caixa: o que entrou e saiu da conta em ${esc(mesLabel(refMes).toLowerCase())} e as cobranças que vencem nele (as de referência ${esc(mesLabel(shiftMes(refMes,-1)).toLowerCase())}). Cobrança marcada como "Já pago por fora" em Boletos conta como recebida.</div>`;
-shell('Banco',body,'<span class="bknote">Dados da aba Banco da planilha</span><div style="display:flex;gap:8px"><button class="btn" type="button" id="bkFechar">Fechar</button><button class="btn primary" type="button" id="bkImp">Atualizar com o Sicredi</button></div>');
+shell('Banco',body,'<span class="bknote">Dados da aba Banco da planilha</span><button class="btn primary" type="button" id="bkFechar">Voltar ao sistema</button>');
 $('#drawerRoot .drawer')?.classList.add('wide');
 $('#bkFechar').onclick=closeDrawer;
-$('#bkImp').onclick=()=>{bancoModo='importar';bancoPrevia=null;drawBanco()};
+$('#bkCopiarTopo').onclick=()=>{const t=promptBanco();const fb=()=>{bancoModo='importar';drawBanco();toast('Selecione o prompt e copie com Ctrl+C.')};try{navigator.clipboard.writeText(t).then(()=>toast('Prompt copiado. Cole no Claude in Chrome com o Sicredi aberto.',null,5000),fb)}catch(e){fb()}};
+$('#bkColarTopo').onclick=()=>{const b=$('#bkColarBox');b.hidden=false;$('#bkTxt').focus()};
+$('#bkAtualizar').onclick=atualizarBanco;
+$('#bkFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{$('#bkTxt').value=String(rd.result||'');atualizarBanco()};rd.readAsText(f,'UTF-8')};
 $('#bkPrev').onclick=()=>{refMes=shiftMes(refMes,-1);render();drawBanco()};
 $('#bkNext').onclick=()=>{refMes=shiftMes(refMes,1);render();drawBanco()};
 document.querySelectorAll('#drawerRoot [data-cli]').forEach(el=>el.onclick=()=>{const id=el.dataset.cli;if(rows.some(r=>r.id===id))openClient(id)});
@@ -1105,8 +1117,8 @@ if(quebra!==null) throw new Error(`O saldo não bate na linha ${quebra+1} (${dat
 const ja=new Set(BANCO.lanc.map(l=>l.id)), m=mapaClientes(), apr=aprendido();
 lista.forEach(l=>{l.cliente_id=ligarCliente(l,m,apr)});
 novos=lista.filter(l=>!ja.has(l.id));
-}catch(e){bancoPrevia={txt,erro:e.message||'Não consegui ler a resposta.'};return drawBanco()}
-if(!novos.length){bancoPrevia={txt};toast('Nada novo: este extrato já estava no Banco.');return}
+}catch(e){bancoPrevia={txt,erro:e.message||'Não consegui ler a resposta.'};bancoModo='painel';return drawBanco()}
+if(!novos.length){bancoPrevia=null;bancoModo='painel';drawBanco();toast('Nada novo: este extrato já estava no Banco.');return}
 const datas=lista.map(l=>l.data).sort(), comSaldo=lista.filter(l=>l.saldo!==null);
 const resumo={periodo_de:datas[0],periodo_ate:datas[datas.length-1],qtd_lancamentos:lista.length,saldo_inicial:comSaldo.length?r2b(comSaldo[0].saldo-comSaldo[0].valor):'',total_entradas:r2b(lista.filter(l=>l.tipo==='credito').reduce((s,l)=>s+l.valor,0)),total_saidas:r2b(lista.filter(l=>l.tipo!=='credito').reduce((s,l)=>s+l.valor,0)),saldo_final:comSaldo.length?comSaldo[comSaldo.length-1].saldo:'',validacao_saldo:'ok'};
 const lig=novos.filter(l=>l.tipo==='credito'&&l.cliente_id).length, sem=novos.filter(l=>l.tipo==='credito'&&!l.cliente_id).length;
@@ -1115,5 +1127,5 @@ GA('importarBanco',novos.map(({_ord,...l})=>l),resumo).then(res=>{
 bancoModo='painel';bancoPrevia=null;
 toast(`Banco atualizado: ${res.novos} lançamento${res.novos===1?'':'s'} novo${res.novos===1?'':'s'}, ${lig} ligado${lig===1?'':'s'} a cliente${sem?`, ${sem} para identificar`:''}.`,null,6000);
 return carregarBanco();
-}).catch(e=>{btn.disabled=false;btn.textContent='Atualizar Banco';bancoPrevia={txt,erro:/not found|encontrad/i.test(String(e&&e.message))?'Falta atualizar o Code.gs no Apps Script.':'Não consegui gravar. Tente de novo.'};drawBanco()});
+}).catch(e=>{btn.disabled=false;btn.textContent='Atualizar Banco';bancoModo='painel';bancoPrevia={txt,erro:/not found|encontrad/i.test(String(e&&e.message))?'Falta atualizar o Code.gs no Apps Script.':'Não consegui gravar. Tente de novo.'};drawBanco()});
 }
