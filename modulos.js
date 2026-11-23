@@ -953,10 +953,10 @@ const c=[imp[imp.length-1],ds[ds.length-1]].filter(Boolean).sort().pop();
 if(c) return {data:c,doExtrato:true};
 const h=isoHoje();return {data:refMes===h.slice(0,7)?h:(refMes<h.slice(0,7)?bkUltimoDia(refMes):refMes+'-01'),doExtrato:false};
 }
-function situacaoMes(){
+function situacaoMes(todas){ // padrão: só boletos disparados ou pagos por fora; todas=true inclui quem não recebeu boleto
 const ct=bkCorte(), hoje=ct.doExtrato?ct.data:'0000-00-00', lanc=(BANCO?BANCO.lanc:[]).filter(l=>l.tipo==='credito'&&l.mes_ref===refMes);
 const salva=refMes;let lista;refMes=shiftMes(salva,-1);try{lista=boletosDoMes()}finally{refMes=salva} // cobranças que vencem neste mês (referência do mês anterior)
-return lista.filter(b=>isNum(b.total)&&b.total>0).map(b=>{
+return lista.filter(b=>isNum(b.total)&&b.total>0&&(todas||b.disp||b.pago)).map(b=>{
 const pags=lanc.filter(l=>l.cliente_id===b.r.id), pago=r2b(pags.reduce((s,l)=>s+l.valor,0));
 const venc=b.partes.map(x=>x.venc).filter(Boolean).sort()[0]||null;
 const falta=b.pago?0:Math.max(0,r2b(b.total-pago));
@@ -994,7 +994,7 @@ const nid=cred.filter(l=>!l.cliente_id), ign=cred.filter(l=>l.cliente_id==='igno
 const clientesRec={};cred.filter(l=>l.cliente_id&&l.cliente_id!=='ignorar').forEach(l=>{(clientesRec[l.cliente_id]=clientesRec[l.cliente_id]||[]).push(l)});
 const prevPor={};sit.forEach(x=>{prevPor[x.b.r.id]=x});
 const recLista=Object.entries(clientesRec).map(([id,ls])=>({id,ls,soma:r2b(ls.reduce((s,l)=>s+l.valor,0)),prev:prevPor[id]})).sort((a,b)=>coll.compare(nomeCli(a.id),nomeCli(b.id)));
-const fora=sit.filter(x=>x.st==='fora'), envOk=sit.filter(x=>x.b.disp), envFalta=sit.filter(x=>!x.b.disp&&x.st!=='pago'&&x.st!=='fora');
+const fora=sit.filter(x=>x.st==='fora'), todasSit=situacaoMes(true), envOk=todasSit.filter(x=>x.b.disp), envFalta=todasSit.filter(x=>!x.b.disp&&x.st!=='pago'&&x.st!=='fora');
 const opcoes=rows.filter(r=>!ehConta(r)).sort((a,b)=>coll.compare(a.cliente||'',b.cliente||'')).map(r=>`<option value="${esc(r.id)}">${esc(r.cliente||'sem nome')}${r.arquivado?' (arquivado)':''}</option>`).join('');
 const linhaCat=([c,v])=>`<div class="bkrow"><span class="n">${esc(c)}</span><span class="val">${brl.format(Math.abs(v))}</span></div>`;
 const pv=bancoPrevia||{};
@@ -1004,12 +1004,12 @@ const body=`<div class="bkbar"><div><strong>Atualizar com o Sicredi</strong><spa
 <span class="bknote">${doMes.length?`Extrato importado até ${dataBR(ultimo)} · ${doMes.length} lançamentos`:'Nenhum extrato deste mês ainda. Clique em "Atualizar com o Sicredi".'}</span></div>
 <div class="bkpos">${corte.doExtrato?`Posição até ${dataBR(corte.data)}, data do último extrato`:`Sem extrato deste mês ainda. Posição calculada até ${dataBR(corte.data)}`}</div>
 <div class="bkhero">
-<div class="bkk"><div class="k">Previsto no mês</div><div class="v">${brl.format(previsto)}</div><div class="s">${sit.length} cobranças vencendo em ${esc(mesLabel(refMes).toLowerCase())}</div></div>
+<div class="bkk"><div class="k">Previsto no mês</div><div class="v">${brl.format(previsto)}</div><div class="s">${sit.length} boletos enviados (ou pagos por fora) vencendo em ${esc(mesLabel(refMes).toLowerCase())}</div></div>
 <div class="bkk good"><div class="k">Recebido até ${dataBR(corte.data)}</div><div class="v">${brl.format(recebido)}</div><div class="bkmeter"><span style="width:${pct}%"></span></div><div class="s">${pct}% do previsto</div></div>
 <div class="bkk bad"><div class="k">Inadimplente até ${dataBR(corte.data)}</div><div class="v">${corte.doExtrato?brl.format(somaAtraso):'–'}</div><div class="s">${corte.doExtrato?`${atraso.length} cliente${atraso.length===1?'':'s'} com vencimento já passado`:'Aparece depois do primeiro extrato do mês'}</div></div>
 <div class="bkk"><div class="k">Falta entrar no mês</div><div class="v">${brl.format(somaAberto)}</div><div class="s">${aberto.length} cliente${aberto.length===1?'':'s'} ainda no prazo</div></div>
 </div>
-<div class="bkbox bkenv"><h4>Envios das cobranças<span>${envOk.length} de ${sit.length} enviadas</span></h4>${envFalta.length?`<div class="bknote">Ainda não enviadas: ${envFalta.map(x=>esc(x.b.r.cliente||'sem nome')).join(', ')}</div>`:'<div class="bknote">Todas as cobranças que vencem neste mês foram enviadas.</div>'}</div>
+<div class="bkbox bkenv"><h4>Envios das cobranças<span>${envOk.length} de ${todasSit.length} enviadas</span></h4>${envFalta.length?`<div class="bknote">Ainda não enviadas: ${envFalta.map(x=>esc(x.b.r.cliente||'sem nome')).join(', ')}</div>`:'<div class="bknote">Todas as cobranças que vencem neste mês foram enviadas.</div>'}</div>
 <div class="bkgrid">
 <div class="bkk"><div class="k">Saldo inicial</div><div class="v">${saldoIni===null?'–':brl.format(saldoIni)}</div></div>
 <div class="bkk good"><div class="k">Entradas na conta</div><div class="v">${brl.format(entradas)}</div><div class="s">${cred.length} lançamentos</div></div>
@@ -1028,7 +1028,7 @@ const body=`<div class="bkbar"><div><strong>Atualizar com o Sicredi</strong><spa
 <div class="bkbox"><h4>Não identificados<span>${nid.length} · ${brl.format(r2b(nid.reduce((s,l)=>s+l.valor,0)))}</span></h4>${nid.length?'<div class="bknote" style="margin-bottom:6px">Escolha de qual cliente é cada entrada. O sistema lembra a escolha nos próximos extratos.</div>':''}${nid.map(l=>`<div class="bknid"><span><strong>${esc(l.contraparte_nome||l.descricao||'Sem descrição')}</strong><span class="bknote" style="display:block">${dataBR(l.data)} · ${esc(l.descricao||'')}${l.contraparte_cpf_cnpj?` · ${esc(l.contraparte_cpf_cnpj)}`:''}</span></span><strong>${brl.format(l.valor)}</strong><select data-lig="${esc(l.id)}" aria-label="Cliente desta entrada"><option value="">Escolher cliente…</option><option value="ignorar">Não é de cliente</option>${opcoes}</select></div>`).join('')||'<div class="bkvazio">Todas as entradas do mês estão ligadas.</div>'}</div>
 ${ign.length?`<details class="bkbox"><summary>Entradas que não são de clientes (${ign.length} · ${brl.format(r2b(ign.reduce((s,l)=>s+l.valor,0)))})</summary>${ign.map(l=>`<div class="bkrow"><span class="n">${esc(l.contraparte_nome||l.descricao)}<span class="sub">${dataBR(l.data)} · ${esc(l.descricao||'')}</span></span><span class="val"><button class="mini" type="button" data-deslig="${esc(l.id)}" title="Voltar para não identificados">↺</button> ${brl.format(l.valor)}</span></div>`).join('')}</details>`:''}
 <details class="bkbox"><summary>Todas as saídas do mês (${deb.length})</summary>${deb.map(l=>`<div class="bkrow"><span class="n">${esc(l.contraparte_nome||l.descricao)}<span class="sub">${dataBR(l.data)} · ${esc(catLanc(l))}${l.contraparte_nome?` · ${esc(l.descricao)}`:''}</span></span><span class="val">${brl.format(Math.abs(l.valor))}</span></div>`).join('')||'<div class="bkvazio">Sem saídas.</div>'}</details>
-<div class="bknote">Este painel mostra o mês do jeito do caixa: o que entrou e saiu da conta em ${esc(mesLabel(refMes).toLowerCase())} e as cobranças que vencem nele (as de referência ${esc(mesLabel(shiftMes(refMes,-1)).toLowerCase())}). Cobrança marcada como "Já pago por fora" em Boletos conta como recebida.</div>`;
+<div class="bknote">Este painel mostra o mês do jeito do caixa: o que entrou e saiu da conta em ${esc(mesLabel(refMes).toLowerCase())} e os boletos enviados que vencem nele (os de referência ${esc(mesLabel(shiftMes(refMes,-1)).toLowerCase())}). Cobrança marcada como "Já pago por fora" em Boletos conta como recebida.</div>`;
 shell('Banco',body,'<span class="bknote">Dados da aba Banco da planilha</span><button class="btn primary" type="button" id="bkFechar">Voltar ao sistema</button>');
 $('#drawerRoot .drawer')?.classList.add('wide');
 $('#bkFechar').onclick=closeDrawer;
@@ -1051,42 +1051,49 @@ GA('vincularBanco',[id],cid).then(()=>{l.cliente_id=cid;drawBanco();toast(cid===
 function bkUltimoDia(m){const [y,mo]=m.split('-').map(Number);return `${m}-${String(new Date(y,mo,0).getDate()).padStart(2,'0')}`}
 function bkPeriodo(){const hoje=isoHoje(),de=refMes+'-01',ate=refMes===hoje.slice(0,7)?hoje:bkUltimoDia(refMes);return {de,ate:ate<de?de:ate}}
 function promptBanco(){
-const {de,ate}=bkPeriodo();
-return `Tarefa: ler o extrato da conta corrente Sicredi (conta 0109 91276-8, M. FERNANDES MATOS LTDA) e me devolver um CSV em texto para o sistema GHAID Cash.
+const {de,ate}=bkPeriodo(), D=dataBR(de), A=dataBR(ate);
+return `Tarefa: ler o extrato da conta corrente Sicredi (conta 0109 91276-8, M. FERNANDES MATOS LTDA) e a cobrança do mesmo período, e me devolver um CSV para o sistema GHAID Cash.
 
-PERÍODO: de ${dataBR(de)} até ${dataBR(ate)}.
+PERÍODO: de ${D} até ${A}.
 
 COMO FAZER
-1. Use a aba do Internet Banking Sicredi (ibpj.sicredi.com.br), que já deve estar aberta e logada. Abra uma aba nova para o extrato e não mexa nas outras abas.
-2. Entre em Conta Corrente > Extratos > Extrato. Em "Período do Extrato", informe De ${dataBR(de)} e Até ${dataBR(ate)} e clique em Pesquisar.
+1. Use a aba do Internet Banking Sicredi (ibpj.sicredi.com.br), que já deve estar aberta e logada. Abra uma aba nova para o trabalho e não mexa nas outras abas.
+2. Entre em Conta Corrente > Extratos > Extrato. Em "Período do Extrato", informe De ${D} e Até ${A} e clique em Pesquisar.
 3. Leia a tabela do extrato pelo conteúdo da página (colunas Data, Descrição, Documento, Valor, Saldo), não por print de tela. Se a leitura vier cortada, leia em partes de 10 a 15 linhas até cobrir todas.
-4. Se o banco não estiver aberto e logado, PARE e me avise.
+4. Para cada crédito do extrato que seja liquidação de boletos (descrição com COBRANCA, LIQUIDACAO, TITULO ou BOLETO), abra o módulo de Cobrança e consulte os títulos liquidados com data de crédito igual à data dessa linha. Para cada boleto, anote: nome do pagador, CPF/CNPJ do pagador, nosso número, seu número (número do documento) e valor pago.
+5. Ainda na Cobrança, consulte os títulos com vencimento no período que estão em aberto ou vencidos, sem pagamento.
+6. Se o banco não estiver aberto e logado, ou se você não encontrar o módulo de Cobrança, PARE e me avise.
 
 SEGURANÇA
-- Somente leitura. Não clique em pagar, transferir, confirmar, gerar boleto, excluir nem alterar cadastro.
+- Somente leitura. Não clique em pagar, transferir, confirmar, gerar boleto, baixar título, protestar, excluir nem alterar cadastro.
 - Se aparecer pedido de senha, token ou assinatura eletrônica, pare e me avise.
 - Feche a aba que você abriu quando terminar.
 
 COMO MONTAR O CSV
-- Uma linha por lançamento. Ignore a linha de saldo anterior (sem data) e o rodapé "Soma dos lançamentos selecionados".
+- Uma linha por lançamento do extrato. Ignore a linha de saldo anterior (sem data) e o rodapé "Soma dos lançamentos selecionados".
 - data no formato AAAA-MM-DD.
 - valor e saldo com ponto decimal e sem separador de milhar (ex.: 1234.56). Débito com sinal de menos (ex.: -59.90).
 - tipo: credito se o valor for maior que zero, senão debito.
 - id: data|documento|valor|saldo (ex.: 2026-11-03|0012345|1180.00|4320.10).
-- Em "PAGAMENTO PIX", "RECEBIMENTO PIX" ou "DEBITO CONVENIOS" seguidos de um número de 11 ou 14 dígitos, coloque esse número em contraparte_cpf_cnpj e o resto do texto em contraparte_nome. Nos outros lançamentos, deixe essas duas colunas vazias.
+- Em "PAGAMENTO PIX", "RECEBIMENTO PIX" ou "DEBITO CONVENIOS" seguidos de um número de 11 ou 14 dígitos, coloque esse número em contraparte_cpf_cnpj e o resto do texto em contraparte_nome.
+- Crédito de liquidação de boletos: troque a linha do extrato por uma linha por boleto liquidado naquela data. Em cada uma: a mesma data; descricao "LIQUIDACAO BOLETO " + seu número; documento = nosso número; valor = valor pago; contraparte_cpf_cnpj = CPF/CNPJ do pagador, só números; contraparte_nome = nome do pagador; saldo = saldo da linha anterior + valor. O saldo da última linha desse grupo tem que ser igual ao saldo da linha original do extrato.
+- Se a soma dos boletos daquela data não bater com o valor do crédito (diferença maior que R$ 0,01), não divida: mantenha a linha original e cite a diferença no resumo final.
+- Nos outros lançamentos, deixe contraparte_cpf_cnpj e contraparte_nome vazios.
 - Ponha entre aspas duplas qualquer campo que tenha vírgula.
 
 CONFERÊNCIA
 - Partindo do saldo anterior, some cada valor e confira se o resultado bate com o saldo de cada linha. Se alguma linha não bater, não entregue o CSV: me mostre onde quebrou.
 
 RESPOSTA
-Responda só com o CSV dentro de um bloco de código, começando por esta linha de títulos:
+Primeiro, fora do bloco de código, a lista "Boletos em aberto ou vencidos no período" (pagador, CPF/CNPJ, seu número, vencimento, valor). Se não houver, escreva "nenhum".
+Depois, só o CSV dentro de um bloco de código, começando por esta linha de títulos:
 id,data,descricao,documento,tipo,valor,saldo,contraparte_cpf_cnpj,contraparte_nome
-Depois do bloco, uma linha com: quantidade de lançamentos, saldo inicial, total de entradas, total de saídas e saldo final.`;
+Depois do bloco, uma linha com: quantidade de lançamentos, saldo inicial, total de entradas, total de saídas, saldo final e as diferenças de liquidação que não foram divididas.`;
 }
 function bkLimpar(txt){
 const ls=String(txt||'').replace(/\r/g,'').split('\n').filter(l=>l.trim().indexOf('`')!==0);
-const i=ls.findIndex(l=>{const k=l.trim().toLowerCase();return k.indexOf('id,')===0||k.indexOf('id;')===0||(k.includes('data')&&k.includes('valor')&&k.includes('descri'))});
+const ehId=l=>{const k=l.trim().toLowerCase();return k.indexOf('id,')===0||k.indexOf('id;')===0};
+let i=ls.findIndex(ehId); if(i<0) i=ls.findIndex(l=>{const k=l.trim().toLowerCase();return k.includes('data')&&k.includes('valor')&&k.includes('descri')});
 return (i>=0?ls.slice(i):ls).join('\n');
 }
 function drawImportar(){
