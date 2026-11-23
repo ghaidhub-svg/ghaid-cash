@@ -5,7 +5,7 @@ Projeto da Morghs (chamar sempre de Morghs). Responder em português, direto, se
 ## Arquitetura
 - `app.html`: página única (HTML/CSS/JS). Publicada no `main`, o Apps Script busca de
   `https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/main/app.html`. Mudança de tela = editar este arquivo e dar push no `main`.
-- `modulos.js`: janelas e painéis usados só por clique (Boletos, ficha do cliente, plano, nota fiscal, permuta, contrato, adicionais, publicações, colunas, acessos, agrupar). O `app.html` busca este arquivo em `https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/main/modulos.js` logo ao abrir; até ele chegar, essas funções esperam. Funções novas desse tipo vão para o `modulos.js`.
+- `modulos.js`: janelas e painéis usados só por clique (Boletos, ficha do cliente, plano, nota fiscal, permuta, contrato, adicionais, publicações, colunas, acessos, agrupar). O `app.html` busca este arquivo logo ao abrir, pelo commit atual do `main` (consulta `api.github.com/repos/ghaidhub-svg/ghaid-cash/commits/main` e baixa `raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/<sha>/modulos.js`), para nunca pegar cópia antiga guardada; se a consulta falhar, usa o endereço do `main`. Até ele chegar, essas funções esperam. Funções novas desse tipo vão para o `modulos.js`.
 - `Code.gs`: servidor Apps Script. Funções chamadas pela tela via `google.script.run`: `listar`, `salvarCliente(id, dados, substituir)`, `excluirCliente(id)`, `lerConfig`, `salvarConfig`.
   Mudança aqui exige colar no editor do Apps Script e criar nova versão da implantação (mesmo URL).
 - Dados: planilha "GHAID Cash · Dados" (Drive da conta ghaidhub@gmail.com). Nunca colocar dados de clientes no repositório (ele é público).
