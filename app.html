@@ -523,7 +523,7 @@ td.items .c .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:6
 <div class="toast" id="toast" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <script>const MODULO_URL='https://raw.githubusercontent.com/ghaidhub-svg/ghaid-cash/main/modulos.js';
-const moduloPronto=fetch(MODULO_URL+'?v='+Date.now()).then(r=>r.ok?r.text():Promise.reject(r.status)).then(t=>{const sc=document.createElement('script');sc.textContent=t;document.head.appendChild(sc);return true}).catch(()=>false);
+const moduloPronto=fetch('https://api.github.com/repos/ghaidhub-svg/ghaid-cash/commits/main',{headers:{Accept:'application/vnd.github.sha'},cache:'no-store'}).then(r=>r.ok?r.text():'').catch(()=>'').then(sha=>{sha=String(sha).trim();return fetch(sha.length===40?MODULO_URL.replace('/main/','/'+sha+'/'):MODULO_URL+'?v='+Date.now(),{cache:'no-store'})}).then(r=>r.ok?r.text():Promise.reject(r.status)).then(t=>{const sc=document.createElement('script');sc.textContent=t;document.head.appendChild(sc);return true}).catch(()=>false);
 ["abrirDesagrupar","abrirPermuta","abrirContrato","escolherNota","openClient","openPub","abrirPlano","openItems","openBoletos","abrirAgrupar","openAcessos","openCols","openBanco"].forEach(n=>{const f=(...a)=>moduloPronto.then(ok=>{if(ok&&window[n]!==f)window[n](...a);else toast('Esta parte do sistema não carregou. Recarregue a página.')});window[n]=f});
 
 const DEFAULT_COLS=[
